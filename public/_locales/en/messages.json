@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "DBML Studio – Database Diagram" },
+  "extDescription": { "message": "Draw entity-relationship diagrams from DBML code. Offline, bilingual (English / 中文), exports PNG, SVG, PDF and SQL." },
+  "actionTitle": { "message": "Open DBML Studio" }
+}

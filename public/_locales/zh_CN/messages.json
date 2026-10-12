@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "DBML Studio – 数据库关系图" },
+  "extDescription": { "message": "用 DBML 代码绘制数据库 ER 图。离线可用，中英双语，可导出 PNG、SVG、PDF 和 SQL。" },
+  "actionTitle": { "message": "打开 DBML Studio" }
+}
