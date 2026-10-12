@@ -55,4 +55,19 @@ describe('buildNodes / buildEdges', () => {
     const edges = buildEdges(model, buildNodes(model, positions, 'names', []), 'names');
     expect(edges[0].sourceHandle).toBe(handleId('posts', 's', 'l'));
   });
+
+  it('reuses unchanged nodes and edges', () => {
+    const nodes = buildNodes(model, positions, 'all', []);
+    const again = buildNodes(model, positions, 'all', nodes);
+    expect(again.every((n, i) => n === nodes[i])).toBe(true);
+    const moved = buildNodes(model, { ...positions, posts: { x: 600, y: 0 } }, 'all', nodes);
+    expect(moved.find((n) => n.id === 'users')).toBe(nodes.find((n) => n.id === 'users'));
+    expect(moved.find((n) => n.id === 'posts')).not.toBe(nodes.find((n) => n.id === 'posts'));
+
+    const edges = buildEdges(model, nodes, 'all');
+    expect(buildEdges(model, moved, 'all', edges)).toBe(edges);
+    // posts moved to the far left: the edge switches sides, so it is rebuilt
+    const flipped = buildNodes(model, { ...positions, posts: { x: -800, y: 0 } }, 'all', nodes);
+    expect(buildEdges(model, flipped, 'all', edges)[0]).not.toBe(edges[0]);
+  });
 });

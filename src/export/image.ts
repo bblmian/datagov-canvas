@@ -22,10 +22,3 @@ export async function renderImage(viewport: HTMLElement, nodes: Node[], format: 
   const dataUrl = format === 'png' ? await toPng(viewport, { ...options, pixelRatio: 2 }) : await toSvg(viewport, options);
   return { dataUrl, width, height };
 }
-
-export async function imageToPdf(pngDataUrl: string, width: number, height: number): Promise<Blob> {
-  const { jsPDF } = await import('jspdf');
-  const pdf = new jsPDF({ orientation: width >= height ? 'landscape' : 'portrait', unit: 'px', format: [width, height], hotfixes: ['px_scaling'], compress: true });
-  pdf.addImage(pngDataUrl, 'PNG', 0, 0, width, height, undefined, 'FAST');
-  return pdf.output('blob');
-}

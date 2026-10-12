@@ -4,15 +4,20 @@ import { useI18n } from '../i18n';
 import type { DField } from '../dbml/types';
 import { handleId, type GroupNode, type NoteNode, type TableNode } from './graph';
 import { visibleFields } from './geometry';
-import { useCanvas } from './highlight';
+import { useCanvas, useHighlight } from './highlight';
 
-/** Invisible connection points on both sides of a row; edges choose a side at build time. */
-function SideHandles({ owner }: { owner: string }) {
+/**
+ * Invisible connection points on both sides of a row; edges choose a side at build time. On column
+ * rows the source handles show as dots on hover: dragging one onto another column creates a Ref.
+ */
+function SideHandles({ owner, connectable = false }: { owner: string; connectable?: boolean }) {
+  const { t } = useI18n();
+  const src = connectable ? { isConnectableStart: true, isConnectableEnd: false, className: 'hd conn', title: t('table.dragToRef') } : { isConnectable: false, className: 'hd' };
   return (
     <>
-      <Handle type="source" id={handleId(owner, 's', 'l')} position={Position.Left} isConnectable={false} className="hd" />
+      <Handle type="source" id={handleId(owner, 's', 'l')} position={Position.Left} {...src} />
       <Handle type="target" id={handleId(owner, 't', 'l')} position={Position.Left} isConnectable={false} className="hd" />
-      <Handle type="source" id={handleId(owner, 's', 'r')} position={Position.Right} isConnectable={false} className="hd" />
+      <Handle type="source" id={handleId(owner, 's', 'r')} position={Position.Right} {...src} />
       <Handle type="target" id={handleId(owner, 't', 'r')} position={Position.Right} isConnectable={false} className="hd" />
     </>
   );
@@ -58,24 +63,50 @@ function FieldTip({ field }: { field: DField }) {
   );
 }
 
+/** One column row; subscribes only to its own highlight so hovering elsewhere doesn't re-render it. */
+const FieldRow = memo(function FieldRow({ field: f, tableId }: { field: DField; tableId: string }) {
+  const { t } = useI18n();
+  const { highlight } = useCanvas();
+  const hl = useHighlight((h) => h.activeFields.has(f.id));
+  const [tip, setTip] = useState(false);
+  return (
+    <div
+      className={`row${hl ? ' hl' : ''}`}
+      data-field-id={f.id}
+      onMouseEnter={() => { highlight.setHover({ tableId, fieldId: f.id }); setTip(true); }}
+      onMouseLeave={() => { highlight.setHover({ tableId }); setTip(false); }}
+    >
+      <SideHandles owner={f.id} connectable />
+      <span className="row-icon">{f.pk ? <KeyIcon /> : f.isRef ? <span className="fk">FK</span> : null}</span>
+      <span className={`row-name${f.pk ? ' pk' : ''}`}>{f.name}</span>
+      <span className="row-type">
+        {f.type}
+        {f.notNull && !f.pk && <span className="nn" title={t('table.notNull')}>NN</span>}
+      </span>
+      {f.note && <span className="row-note" aria-hidden />}
+      {tip && <FieldTip field={f} />}
+    </div>
+  );
+});
+
 export const TableNodeView = memo(function TableNodeView({ data, selected }: NodeProps<TableNode>) {
   const { table, mode } = data;
   const { t } = useI18n();
-  const { setHover, activeFields, focusing, hover } = useCanvas();
-  const [tipField, setTipField] = useState<string | null>(null);
+  const { highlight, connectKind } = useCanvas();
   const fields = visibleFields(table, mode);
-  const touched = table.fields.some((f) => activeFields.has(f.id)) || hover.tableId === table.id || selected;
+  const dim = useHighlight((h) => h.focusing && h.hoverTableId !== table.id && !table.fields.some((f) => h.activeFields.has(f.id)));
   const style = { '--hc': table.headerColor, '--hc-text': readableOn(table.headerColor) } as CSSProperties;
 
   return (
     <div
-      className={`tbl${selected ? ' sel' : ''}${focusing && !touched ? ' dim' : ''}`}
+      className={`tbl${selected ? ' sel' : ''}${dim && !selected ? ' dim' : ''}`}
       style={style}
-      onMouseEnter={() => setHover({ tableId: table.id })}
-      onMouseLeave={() => { setHover({}); setTipField(null); }}
+      data-table-id={table.id}
+      onMouseEnter={() => highlight.setHover({ tableId: table.id })}
+      onMouseLeave={() => highlight.setHover({})}
     >
       <div className="tbl-head" title={table.note}>
-        <SideHandles owner={table.id} />
+        <SideHandles owner={table.id} connectable={connectKind === 'dep'} />
         <span className="tbl-name">
           {table.schema && <span className="tbl-schema">{table.schema}.</span>}
           {table.name}
@@ -86,24 +117,7 @@ export const TableNodeView = memo(function TableNodeView({ data, selected }: Nod
       </div>
       {fields.length > 0 && (
         <div className="tbl-body">
-          {fields.map((f) => (
-            <div
-              key={f.id}
-              className={`row${activeFields.has(f.id) ? ' hl' : ''}`}
-              onMouseEnter={() => { setHover({ tableId: table.id, fieldId: f.id }); setTipField(f.id); }}
-              onMouseLeave={() => { setHover({ tableId: table.id }); setTipField(null); }}
-            >
-              <SideHandles owner={f.id} />
-              <span className="row-icon">{f.pk ? <KeyIcon /> : f.isRef ? <span className="fk">FK</span> : null}</span>
-              <span className={`row-name${f.pk ? ' pk' : ''}`}>{f.name}</span>
-              <span className="row-type">
-                {f.type}
-                {f.notNull && !f.pk && <span className="nn" title={t('table.notNull')}>NN</span>}
-              </span>
-              {f.note && <span className="row-note" aria-hidden />}
-              {tipField === f.id && <FieldTip field={f} />}
-            </div>
-          ))}
+          {fields.map((f) => <FieldRow key={f.id} field={f} tableId={table.id} />)}
         </div>
       )}
     </div>
@@ -122,7 +136,7 @@ export const GroupNodeView = memo(function GroupNodeView({ data }: NodeProps<Gro
 export const NoteNodeView = memo(function NoteNodeView({ data }: NodeProps<NoteNode>) {
   const { note } = data;
   return (
-    <div className="sticky" style={note.color ? ({ '--nc': note.color } as CSSProperties) : undefined}>
+    <div className={`sticky${note.color === 'none' ? ' no-fill' : ''}`} style={note.color && note.color !== 'none' ? ({ '--nc': note.color } as CSSProperties) : undefined}>
       <div className="sticky-head">{note.name}</div>
       <div className="sticky-body">{note.content}</div>
     </div>

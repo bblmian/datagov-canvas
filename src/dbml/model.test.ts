@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Parser, exporter, importer } from '@dbml/core';
-import { toDiagramModel, toDiagnostics } from './model';
+import { reuseUnchanged, toDiagramModel, toDiagnostics } from './model';
 import { sampleDbml } from './sample';
 import { locateDeclaration } from './locate';
 
@@ -75,6 +75,26 @@ Note n {
       expect(m.refs).toHaveLength(3);
       expect(m.notes).toHaveLength(1);
     }
+  });
+});
+
+describe('reuseUnchanged', () => {
+  const parse = (src: string) => toDiagramModel(Parser.parse(src, 'dbmlv2').normalize() as never);
+  const src = `Table a {\n  id int [pk]\n}\nTable b {\n  id int [pk]\n  a_id int [ref: > a.id]\n}\n`;
+
+  it('returns the previous model when nothing changed', () => {
+    const prev = parse(src);
+    expect(reuseUnchanged(prev, parse(`// comment\n${src}`))).toBe(prev);
+  });
+
+  it('keeps unchanged tables and refs, replaces changed ones', () => {
+    const prev = parse(src);
+    const next = reuseUnchanged(prev, parse(src.replace('Table a {\n  id int [pk]', 'Table a {\n  id int [pk]\n  name text')));
+    expect(next).not.toBe(prev);
+    expect(next.tables.find((t) => t.id === 'b')).toBe(prev.tables.find((t) => t.id === 'b'));
+    expect(next.tables.find((t) => t.id === 'a')).not.toBe(prev.tables.find((t) => t.id === 'a'));
+    expect(next.tables.find((t) => t.id === 'a')!.fields.map((f) => f.name)).toEqual(['id', 'name']);
+    expect(next.refs).toBe(prev.refs);
   });
 });
 

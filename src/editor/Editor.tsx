@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
-import { indentWithTab } from '@codemirror/commands';
+import { indentWithTab, redo, undo } from '@codemirror/commands';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { setDiagnostics, type Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { autocompletion, type CompletionContext, type Completion } from '@codemirror/autocomplete';
@@ -11,9 +11,14 @@ import { dbml } from './dbmlLanguage';
 import type { Diagnostic } from '../dbml/types';
 
 export interface EditorHandle {
-  /** Moves the cursor to `offset`, scrolls it into view and selects that line. */
+  /**
+   * Selects the line at `offset` and scrolls it into view, without taking focus: keys pressed
+   * next (Delete, ⌘ for multi-select) must still reach the canvas.
+   */
   reveal(offset: number): void;
   revealLine(line: number, column?: number): void;
+  undo(): void;
+  redo(): void;
 }
 
 interface Props {
@@ -92,12 +97,19 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor({ value, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Replace the document when the value changes from outside (switching diagrams, import).
+  // Apply changes made outside the editor (graphical edits, switching diagrams, import). Only the
+  // differing middle part is replaced, so scroll position survives and Cmd+Z undoes it as one step.
   useEffect(() => {
     const v = view.current;
-    if (v && v.state.doc.toString() !== value) {
-      v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: value } });
-    }
+    if (!v) return;
+    const cur = v.state.doc.toString();
+    if (cur === value) return;
+    let a = 0;
+    const max = Math.min(cur.length, value.length);
+    while (a < max && cur.charCodeAt(a) === value.charCodeAt(a)) a++;
+    let b = 0;
+    while (b < max - a && cur.charCodeAt(cur.length - 1 - b) === value.charCodeAt(value.length - 1 - b)) b++;
+    v.dispatch({ changes: { from: a, to: cur.length - b, insert: value.slice(a, value.length - b) } });
   }, [value]);
 
   useEffect(() => {
@@ -123,7 +135,6 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor({ value, o
       if (!v) return;
       const line = v.state.doc.lineAt(Math.min(offset, v.state.doc.length));
       v.dispatch({ selection: { anchor: line.from, head: line.to }, effects: EditorView.scrollIntoView(line.from, { y: 'start', yMargin: 48 }) });
-      v.focus();
     },
     revealLine(line: number, column = 1) {
       const v = view.current;
@@ -133,6 +144,8 @@ export const Editor = forwardRef<EditorHandle, Props>(function Editor({ value, o
       v.dispatch({ selection: { anchor: pos }, effects: EditorView.scrollIntoView(pos, { y: 'center' }) });
       v.focus();
     },
+    undo() { if (view.current) undo(view.current); },
+    redo() { if (view.current) redo(view.current); },
   }));
 
   return <div className="editor-host" ref={host} />;

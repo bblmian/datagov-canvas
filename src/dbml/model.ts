@@ -1,4 +1,4 @@
-import type { DEnum, DField, DGroup, DiagramModel, DNote, DRef, DTable, Diagnostic } from './types';
+import type { DDep, DEnum, DField, DGroup, DiagramModel, DNote, DRef, DTable, DView, Diagnostic } from './types';
 
 // Loose shape of @dbml/core's `Database.normalize()` output — only the parts we read.
 type Id = number;
@@ -12,7 +12,9 @@ interface NormalizedModel {
     type?: { schemaName?: string | null; type_name?: string; args?: string | null };
     dbdefault?: { type?: string; value?: unknown } | null;
   }>;
-  refs?: Record<Id, { id: Id; name?: string | null; endpointIds: Id[] }>;
+  refs?: Record<Id, { id: Id; name?: string | null; color?: string | null; inactive?: boolean; schemaId?: Id; endpointIds: Id[] }>;
+  deps?: Record<Id, { id: Id; name?: string | null; color?: string | null; note?: string | null; schemaId?: Id; edgeIds: Id[] }>;
+  depEdges?: Record<Id, { id: Id; upstreamTableId: Id; upstreamFieldIds: Id[]; downstreamTableId: Id; downstreamFieldIds: Id[] }>;
   endpoints?: Record<Id, { id: Id; relation: string; fieldIds: Id[]; tableName: string; schemaName?: string | null }>;
   tableGroups?: Record<Id, { id: Id; name: string; color?: string | null; note?: string | null; tableIds: Id[]; schemaId: Id }>;
   enums?: Record<Id, { id: Id; name: string; schemaId: Id; valueIds: Id[] }>;
@@ -26,18 +28,48 @@ const DEFAULT_SCHEMA = 'public';
 const vals = <T,>(o: Record<Id, T> | undefined): T[] => (o ? Object.values(o) : []);
 const opt = (s: string | null | undefined) => (s == null || s === '' ? undefined : s);
 
-function qualified(schema: string | undefined, name: string) {
+export function qualified(schema: string | undefined, name: string) {
   return !schema || schema === DEFAULT_SCHEMA ? name : `${schema}.${name}`;
 }
 
-function formatDefault(d: { type?: string; value?: unknown } | null | undefined): string | undefined {
+export function formatDefault(d: { type?: string; value?: unknown } | null | undefined): string | undefined {
   if (!d || d.value === undefined || d.value === null) return undefined;
   if (d.type === 'string') return `'${String(d.value)}'`;
   if (d.type === 'expression') return `\`${String(d.value)}\``;
   return String(d.value);
 }
 
-export function toDiagramModel(n: NormalizedModel): DiagramModel {
+/** `DiagramView`s as @dbml/core interprets them (they are not part of `normalize()`). */
+export interface RawView {
+  name: string;
+  visibleEntities?: {
+    tables: { name: string; schemaName?: string | null }[] | null;
+    tableGroups: { name: string }[] | null;
+    schemas: { name: string }[] | null;
+    stickyNotes: { name: string }[] | null;
+  };
+}
+
+/**
+ * @dbml/core uses `[]` both for `*` and for "this kind not listed while another is", and null
+ * for "none". Tables, groups and schemas together pick tables: only when all three are empty
+ * arrays (`*`) are all tables shown. Notes: `[]` is `*`.
+ */
+function toView(v: RawView): DView {
+  const e = v.visibleEntities ?? { tables: null, tableGroups: null, schemas: null, stickyNotes: null };
+  const listed = (x: unknown[] | null) => !!x && x.length > 0;
+  const all = !listed(e.tables) && !listed(e.tableGroups) && !listed(e.schemas) && !!e.tables && !!e.tableGroups && !!e.schemas;
+  return {
+    id: `view:${v.name}`,
+    name: v.name,
+    tables: all ? 'all' : listed(e.tables) ? e.tables!.map((t) => qualified(t.schemaName ?? undefined, t.name)) : null,
+    groups: listed(e.tableGroups) ? e.tableGroups!.map((g) => `group:${g.name}`) : null,
+    schemas: listed(e.schemas) ? e.schemas!.map((s) => s.name) : null,
+    notes: e.stickyNotes === null ? null : e.stickyNotes.length ? e.stickyNotes.map((n) => `note:${n.name}`) : 'all',
+  };
+}
+
+export function toDiagramModel(n: NormalizedModel, rawViews: RawView[] = []): DiagramModel {
   const schemaName = (id: Id) => n.schemas?.[id]?.name;
 
   const tableIdOf = new Map<Id, string>();
@@ -109,7 +141,7 @@ export function toDiagramModel(n: NormalizedModel): DiagramModel {
       return { tableId, fieldIds, relation: e!.relation };
     });
     if (!a.fieldIds.length || !b.fieldIds.length) continue;
-    refs.push({ id: `ref:${r.id}`, name: opt(r.name), from: a, to: b });
+    refs.push({ id: `ref:${r.id}`, name: opt(r.name), from: a, to: b, ...(opt(r.color) ? { color: opt(r.color) } : {}), ...(r.inactive ? { inactive: true } : {}) });
   }
 
   const groups: DGroup[] = vals(n.tableGroups).map((g) => ({
@@ -138,7 +170,60 @@ export function toDiagramModel(n: NormalizedModel): DiagramModel {
     ? { name: opt(db.name), databaseType: opt(db.databaseType), note: opt(db.note) }
     : undefined;
 
-  return { project, tables, refs, groups, enums, notes };
+  const fieldOf = (fid: Id) => fieldIdOf(fid);
+  const deps: DDep[] = vals(n.deps).map((d) => ({
+    id: `dep:${d.id}`,
+    ...(opt(d.name) ? { name: opt(d.name) } : {}),
+    ...(opt(d.color) ? { color: opt(d.color) } : {}),
+    ...(opt(d.note) ? { note: opt(d.note) } : {}),
+    edges: d.edgeIds.map((eid) => n.depEdges?.[eid]).filter((e) => !!e).map((e) => ({
+      up: { tableId: tableIdOf.get(e!.upstreamTableId)!, fieldIds: e!.upstreamFieldIds.map(fieldOf) },
+      down: { tableId: tableIdOf.get(e!.downstreamTableId)!, fieldIds: e!.downstreamFieldIds.map(fieldOf) },
+    })).filter((e) => e.up.tableId && e.down.tableId),
+  }));
+
+  return { project, tables, refs, groups, enums, notes, views: rawViews.map(toView), deps };
+}
+
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || !a || !b) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  return ka.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+}
+
+/**
+ * Returns `next` with every table/ref/group/enum/note that equals its counterpart (same id) in
+ * `prev` replaced by the `prev` object, or `prev` itself when nothing changed. Each parse produces
+ * a brand-new model; sharing the unchanged parts lets the canvas skip re-rendering them.
+ */
+export function reuseUnchanged(prev: DiagramModel | null, next: DiagramModel): DiagramModel {
+  if (!prev) return next;
+  const sameProject = deepEqual(prev.project, next.project);
+  let changed = !sameProject;
+  const share = <T extends { id: string }>(a: T[], b: T[]): T[] => {
+    const byId = new Map(a.map((x) => [x.id, x]));
+    const out = b.map((x) => {
+      const old = byId.get(x.id);
+      return old && deepEqual(old, x) ? old : x;
+    });
+    if (out.length === a.length && out.every((x, i) => x === a[i])) return a;
+    changed = true;
+    return out;
+  };
+  const shared: DiagramModel = {
+    project: sameProject ? prev.project : next.project,
+    tables: share(prev.tables, next.tables),
+    refs: share(prev.refs, next.refs),
+    groups: share(prev.groups, next.groups),
+    enums: share(prev.enums, next.enums),
+    notes: share(prev.notes, next.notes),
+    views: share(prev.views ?? [], next.views),
+    deps: share(prev.deps ?? [], next.deps),
+  };
+  return changed ? shared : prev;
 }
 
 interface RawDiag {

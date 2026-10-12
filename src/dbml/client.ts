@@ -37,6 +37,6 @@ function call<T>(req: DistributiveOmit<WorkerRequest, 'id'>): Promise<T> {
   });
 }
 
-export const parseDbml = (source: string) => call<ParseResult>({ op: 'parse', source }).then((r) => r.model);
+export const parseDbml = (source: string) => call<ParseResult>({ op: 'parse', source });
 export const exportDbml = (source: string, format: SqlExportFormat | 'json') => call<string>({ op: 'export', source, format });
 export const importToDbml = (text: string, format: ImportFormat) => call<string>({ op: 'import', text, format });

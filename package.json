@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "icons": "node scripts/make-icons.mjs"
+    "icons": "node scripts/make-icons.mjs",
+    "e2e": "node e2e/run.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.3",
@@ -23,7 +24,6 @@
     "@xyflow/react": "12.3.6",
     "codemirror": "6.0.1",
     "html-to-image": "1.11.11",
-    "jspdf": "2.5.2",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
@@ -32,6 +32,7 @@
     "@types/react": "18.3.12",
     "@types/react-dom": "18.3.1",
     "@vitejs/plugin-react": "4.3.3",
+    "playwright-core": "1.48.2",
     "typescript": "5.6.3",
     "vite": "5.4.10",
     "vitest": "2.1.4"

@@ -3,19 +3,29 @@ import type { XYPosition } from '@xyflow/react';
 import { I18nProvider, detectLang, translate, type Lang, type MessageKey } from './i18n';
 import { storage, newId, type DiagramDoc, type DiagramMeta, type DisplayMode, type Settings } from './storage';
 import { DbmlError, exportDbml, importToDbml, parseDbml } from './dbml/client';
-import type { DiagramModel, Diagnostic } from './dbml/types';
+import type { DDepEnd, DiagramModel, Diagnostic, EditInfo } from './dbml/types';
+import { EditError, type EditCtx, type EditResult } from './dbml/edit';
+import * as E from './dbml/edit';
+import { reuseUnchanged } from './dbml/model';
 import type { SqlExportFormat } from './dbml/protocol';
 import { sampleDbml } from './dbml/sample';
+import { applyView } from './dbml/views';
 import { locateDeclaration } from './dbml/locate';
 import { Editor, type EditorHandle } from './editor/Editor';
 import { Canvas, type CanvasHandle } from './canvas/Canvas';
 import { Dropdown } from './components/Dropdown';
 import { DiagramList } from './components/DiagramList';
 import { ImportDialog, type ImportSource } from './components/ImportDialog';
+import { PdfExportDialog } from './components/PdfExportDialog';
+import { Inspector, type InspectTarget, type RunEdit } from './components/Inspector';
+import type { PdfLayout } from './export/print';
 import { download, safeFileName } from './export/download';
-import { imageToPdf } from './export/image';
 
-const PARSE_DELAY = 250;
+// Parsing runs in the worker and takes ~10–60 ms even for large documents, so the diagram can
+// follow the text closely. Errors wait a little longer: mid-word states are usually invalid, and
+// flashing them on every pause while typing is noisy.
+const PARSE_DELAY = 100;
+const ERROR_DELAY = 400;
 const SAVE_DELAY = 400;
 const NEW_DIAGRAM_SOURCE = 'Table table_name {\n  id integer [pk, increment]\n  name varchar\n}\n';
 
@@ -27,10 +37,23 @@ export function App() {
   const [diagrams, setDiagrams] = useState<DiagramMeta[]>([]);
   const [doc, setDoc] = useState<DiagramDoc | null>(null);
   const [model, setModel] = useState<DiagramModel | null>(null);
+  const [info, setInfo] = useState<EditInfo | null>(null);
+  const [inspect, setInspect] = useState<InspectTarget | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
+  const inspectRef = useRef(inspect);
+  inspectRef.current = inspect;
+  useEffect(() => { if (inspect) setInfo(parsed.current?.info ?? null); }, [inspect]);
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([]);
+  const diagnosticsRef = useRef(diagnostics);
+  diagnosticsRef.current = diagnostics;
   const [dirty, setDirty] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const [importing, setImporting] = useState(false);
+  const [pdfDialog, setPdfDialog] = useState(false);
+  /** the DiagramView shown on the canvas (null: everything) */
+  const [activeView, setActiveView] = useState<string | null>(null);
+  const activeViewRef = useRef(activeView);
+  activeViewRef.current = activeView;
   const editor = useRef<EditorHandle>(null);
   const canvas = useRef<CanvasHandle>(null);
 
@@ -71,6 +94,7 @@ export function App() {
     const d = await storage.loadDiagram(id);
     if (!d) return;
     setModel(null);
+    resetEditing();
     setDiagnostics([]);
     setDoc(d);
     updateSettings({ currentId: id });
@@ -82,6 +106,7 @@ export function App() {
     await storage.saveDiagram(d);
     setDiagrams(await storage.listDiagrams());
     setModel(null);
+    resetEditing();
     setDiagnostics([]);
     setDoc(d);
     updateSettings({ currentId: d.id });
@@ -130,26 +155,159 @@ export function App() {
   // ---- parsing ------------------------------------------------------------------------
 
   const parseSeq = useRef(0);
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  /** the last successful parse: the model and source map belong to exactly this text */
+  const parsed = useRef<{ source: string; model: DiagramModel; info: EditInfo } | null>(null);
+  /** set by graphical edits, which want the diagram updated without the typing delay */
+  const parseNow = useRef(false);
   const source = doc?.source;
   const docId = doc?.id;
   useEffect(() => {
     if (source === undefined) return;
     const seq = ++parseSeq.current;
+    const delay = model && !parseNow.current ? PARSE_DELAY : 0;
+    parseNow.current = false;
     const id = setTimeout(async () => {
       try {
-        const m = await parseDbml(source);
+        const r = await parseDbml(source);
         if (seq !== parseSeq.current) return;
+        const m = reuseUnchanged(modelRef.current, r.model);
+        parsed.current = { source, model: m, info: r.info };
+        modelRef.current = m;
         setModel(m);
-        setDiagnostics([]);
+        // offsets change on every keystroke; only the open inspector needs them re-rendered
+        if (inspectRef.current) setInfo(r.info);
+        setDiagnostics((d) => (d.length ? [] : d));
+        drainEdits.current();
       } catch (e) {
         if (seq !== parseSeq.current) return;
-        setDiagnostics(e instanceof DbmlError ? e.diagnostics : [{ message: String(e), line: 1, column: 1, severity: 'error' }]);
+        const diags: Diagnostic[] = e instanceof DbmlError ? e.diagnostics : [{ message: String(e), line: 1, column: 1, severity: 'error' }];
+        if (pendingEdits.current.length) {
+          pendingEdits.current = [];
+          showToast(t('edit.fixErrors'), 'error');
+        }
+        // with nothing on screen yet, show the errors right away
+        if (!modelRef.current) setDiagnostics(diags);
+        else setTimeout(() => { if (seq === parseSeq.current) setDiagnostics(diags); }, ERROR_DELAY);
       }
-    }, model ? PARSE_DELAY : 0);
+    }, delay);
     return () => clearTimeout(id);
     // `model` only decides the delay for the first parse of a diagram
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, docId]);
+
+  // ---- graphical editing -------------------------------------------------------------
+  // Each edit rewrites the DBML text using the source map of the last parse, so edits wait in a
+  // queue until the text on screen has been parsed (normally a few ms after the previous edit).
+
+  type Pending = { fn: (c: EditCtx) => EditResult; then?: (r: EditResult) => void; place?: XYPosition };
+  const pendingEdits = useRef<Pending[]>([]);
+  const drainEdits = useRef(() => {});
+  drainEdits.current = () => {
+    for (;;) {
+      const d = docRef.current;
+      const p = parsed.current;
+      if (!pendingEdits.current.length || !d || !p || p.source !== d.source) return;
+      const { fn, then, place } = pendingEdits.current.shift()!;
+      let r: EditResult;
+      try {
+        r = fn({ source: d.source, model: p.model, info: p.info });
+      } catch (e) {
+        pendingEdits.current = [];
+        const msg = e instanceof EditError ? t(`edit.error.${e.code}` as MessageKey, { name: e.detail }) : e instanceof Error ? e.message : String(e);
+        showToast(msg, 'error');
+        return;
+      }
+      if (r.source !== d.source) {
+        const positions = { ...d.positions };
+        for (const [from, to] of Object.entries(r.renamed ?? {})) {
+          if (positions[from]) { positions[to] = positions[from]; delete positions[from]; }
+        }
+        for (const id of r.removed ?? []) delete positions[id];
+        if (place && r.created) positions[r.created] = place;
+        const next = { ...d, source: r.source, positions, updatedAt: Date.now() };
+        docRef.current = next;
+        parseNow.current = true;
+        setDoc(next);
+        setDirty(true);
+        if (r.renamed) {
+          setInspect((cur) => (cur?.id && r.renamed![cur.id] ? { ...cur, id: r.renamed![cur.id] } : cur));
+          setActiveView((cur) => (cur && r.renamed![cur]) || cur);
+        }
+      }
+      then?.(r);
+    }
+  };
+
+  function resetEditing() {
+    parsed.current = null;
+    setActiveView(null);
+    pendingEdits.current = [];
+    setInspect(null);
+  }
+
+  const runEdit = useCallback<RunEdit>((fn, opts) => {
+    if (diagnosticsRef.current.length) return showToast(t('edit.fixErrors'), 'error');
+    pendingEdits.current.push({ fn, then: opts?.then });
+    drainEdits.current();
+  }, [showToast, t]);
+
+  const editAt = useCallback((fn: (c: EditCtx) => EditResult, place: XYPosition, then?: (r: EditResult) => void) => {
+    if (diagnosticsRef.current.length) return showToast(t('edit.fixErrors'), 'error');
+    pendingEdits.current.push({ fn, place, then });
+    drainEdits.current();
+  }, [showToast, t]);
+
+  /** Something created while a view that lists its members is shown joins that view, so it stays visible. */
+  const addToActiveView = useCallback((kind: 'tables' | 'notes', id: string) => {
+    const viewId = activeViewRef.current;
+    if (!viewId) return;
+    runEdit((c) => {
+      const v = c.model.views.find((x) => x.id === viewId);
+      const list = v?.[kind];
+      return v && Array.isArray(list) && !list.includes(id) ? E.updateView(c, v.id, { [kind]: [...list, id] }) : { source: c.source };
+    });
+  }, [runEdit]);
+  const onAddTable = useCallback((at: XYPosition) => editAt((c) => E.addTable(c), at, (r) => {
+    if (r.created) addToActiveView('tables', r.created);
+    setInspect({ kind: 'table', id: r.created });
+    setFocus('name');
+  }), [editAt, addToActiveView]);
+  const onAddNote = useCallback((at: XYPosition) => editAt((c) => E.addNote(c, t('ins.note.placeholder')), at, (r) => {
+    if (r.created) addToActiveView('notes', r.created);
+    setInspect({ kind: 'note', id: r.created });
+  }), [editAt, t, addToActiveView]);
+  const onShowView = useCallback((id: string | null) => setActiveView(id), []);
+  const view = model?.views.find((v) => v.id === activeView);
+  const shownModel = useMemo(() => (model ? applyView(model, view) : null), [model, view]);
+  const onConnectFields = useCallback((from: string, to: string) => runEdit((c) => {
+    // dragging from a key to a non-key column: the other column is the one that references
+    const f = (id: string) => c.model.tables.flatMap((x) => x.fields).find((x) => x.id === id);
+    return f(from)?.pk && !f(to)?.pk ? E.addRef(c, to, from) : E.addRef(c, from, to);
+  }), [runEdit]);
+  const onConnectDep = useCallback((up: DDepEnd, down: DDepEnd) => runEdit((c) => E.addDep(c, up, down)), [runEdit]);
+  const onDeleteElements = useCallback((ids: { tables: string[]; notes: string[] }) => {
+    for (const id of ids.tables) runEdit((c) => (c.model.tables.some((x) => x.id === id) ? E.deleteTable(c, id) : { source: c.source }));
+    for (const id of ids.notes) runEdit((c) => (c.model.notes.some((x) => x.id === id) ? E.deleteNote(c, id) : { source: c.source }));
+    setInspect(null);
+  }, [runEdit]);
+  const onGroupTables = useCallback((tableIds: string[]) => runEdit((c) => E.addGroup(c, tableIds), { then: (r) => setInspect({ kind: 'group', id: r.created }) }), [runEdit]);
+  const onInspect = useCallback((target: InspectTarget | null) => { setFocus(null); setInspect(target); }, []);
+
+  // ⌘Z / ⇧⌘Z outside text fields undo graphical edits too (the editor's own history)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const el = e.target as HTMLElement;
+      if (el.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      if (e.shiftKey) editor.current?.redo();
+      else editor.current?.undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   // ---- actions ------------------------------------------------------------------------
 
@@ -186,8 +344,8 @@ export function App() {
       if (kind === 'dbml') return download(`${fileBase}.dbml`, doc.source);
       if (kind === 'png' || kind === 'svg' || kind === 'pdf') {
         if (!model || !canvas.current) return showToast(t('export.fixErrors'), 'error');
-        const img = await canvas.current.exportImage(kind === 'svg' ? 'svg' : 'png');
-        if (kind === 'pdf') return download(`${fileBase}.pdf`, await imageToPdf(img.dataUrl, img.width, img.height));
+        if (kind === 'pdf') return setPdfDialog(true);
+        const img = await canvas.current.exportImage(kind);
         return download(`${fileBase}.${kind}`, img.dataUrl);
       }
       if (diagnostics.length) return showToast(t('export.fixErrors'), 'error');
@@ -198,12 +356,23 @@ export function App() {
     }
   }, [doc, model, diagnostics.length, fileBase, showToast, t]);
 
+  const exportPdf = useCallback(async (layout: PdfLayout) => {
+    setPdfDialog(false);
+    updateSettings({ pdfLayout: layout });
+    try {
+      await canvas.current?.printPdf(fileBase, layout);
+    } catch (e) {
+      showToast(t('export.failed', { msg: e instanceof Error ? e.message : String(e) }), 'error');
+    }
+  }, [fileBase, updateSettings, showToast, t]);
+
   const doImport = useCallback(async (text: string, format: ImportSource, asNew: boolean) => {
     try {
       const dbml = format === 'dbml' ? text : await importToDbml(text, format);
       if (asNew) await createDiagram(`${t('diagram.untitled')} (${format})`, dbml);
       else {
         setModel(null);
+        resetEditing();
         patchDoc({ source: dbml, positions: {} });
       }
       setImporting(false);
@@ -326,8 +495,9 @@ export function App() {
         </header>
 
         <main className="workspace">
-          {!settings.editorHidden && (
-            <section className="editor-pane" style={{ width: editorWidth }}>
+          {/* stays mounted when collapsed: graphical edits go through its undo history */}
+          {(
+            <section className="editor-pane" style={{ width: editorWidth, display: settings.editorHidden ? 'none' : undefined }}>
               <Editor
                 ref={editor}
                 value={doc.source}
@@ -366,7 +536,11 @@ export function App() {
           <Canvas
             key={doc.id}
             ref={canvas}
-            model={model}
+            model={shownModel}
+            views={model?.views ?? []}
+            activeView={view ? view.id : null}
+            onActiveViewChange={onShowView}
+            hiddenTables={model && view ? model.tables.length - (shownModel?.tables.length ?? 0) : 0}
             stale={!!model && errors.length > 0}
             broken={!model && errors.length > 0}
             positions={doc.positions}
@@ -376,10 +550,36 @@ export function App() {
             showMinimap={settings.showMinimap ?? false}
             onToggleMinimap={() => updateSettings({ showMinimap: !settings.showMinimap })}
             onElementClick={onElementClick}
+            inspecting={!!inspect}
+            onInspect={onInspect}
+            onAddTable={onAddTable}
+            onAddNote={onAddNote}
+            onConnectFields={onConnectFields}
+            onConnectDep={onConnectDep}
+            onDeleteElements={onDeleteElements}
+            onGroupTables={onGroupTables}
+            onUndo={() => editor.current?.undo()}
+            onRedo={() => editor.current?.redo()}
           />
+          {inspect && model && (
+            <Inspector
+              key={`${inspect.kind}:${inspect.id ?? ''}`}
+              target={inspect}
+              model={model}
+              info={info}
+              run={runEdit}
+              focus={focus}
+              setFocus={setFocus}
+              onSelect={onInspect}
+              activeView={view ? view.id : null}
+              onShowView={onShowView}
+              onClose={() => setInspect(null)}
+            />
+          )}
         </main>
 
         {importing && <ImportDialog onSubmit={doImport} onClose={() => setImporting(false)} />}
+        {pdfDialog && <PdfExportDialog initial={settings.pdfLayout ?? 'a4'} onSubmit={(l) => void exportPdf(l)} onClose={() => setPdfDialog(false)} />}
         {toast && <div className={`toast ${toast.kind}`} role="status">{toast.text}</div>}
       </div>
     </I18nProvider>

@@ -3,6 +3,7 @@
 // dialect parser), so keeping it off the main thread keeps typing and dragging smooth.
 import { Parser, exporter, importer } from '@dbml/core';
 import { toDiagramModel, toDiagnostics } from './model';
+import { toEditInfo } from './editinfo';
 import type { ParseResult, WorkerRequest, WorkerResponse } from './protocol';
 
 declare const self: DedicatedWorkerGlobalScope;
@@ -11,7 +12,7 @@ function handle(req: WorkerRequest): unknown {
   switch (req.op) {
     case 'parse': {
       const db = Parser.parse(req.source, 'dbmlv2');
-      const result: ParseResult = { model: toDiagramModel(db.normalize() as never) };
+      const result: ParseResult = { model: toDiagramModel(db.normalize() as never, (db as unknown as { diagramViews?: never[] }).diagramViews ?? []), info: toEditInfo(db as never, req.source) };
       return result;
     }
     case 'export':

@@ -6,6 +6,7 @@
 //          dd:settings       -> Settings
 import type { Lang } from './i18n';
 import type { XYPosition } from '@xyflow/react';
+import type { PdfLayout } from './export/print';
 
 export type DisplayMode = 'all' | 'keys' | 'names';
 
@@ -28,6 +29,8 @@ export interface Settings {
   editorHidden?: boolean;
   displayMode?: DisplayMode;
   showMinimap?: boolean;
+  /** last choice in the PDF export dialog */
+  pdfLayout?: PdfLayout;
 }
 
 const hasChromeStorage = typeof chrome !== 'undefined' && !!chrome.storage?.local;
