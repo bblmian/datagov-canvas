@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Manifest V3 Chrome extension ("DBML Studio") that re-implements the core of dbdiagram.io offline: a DBML editor on the left, a live ER diagram on the right, bilingual UI (en / zh). It must not use dbdiagram.io / Holistics branding — it is an independent implementation that only uses the open-source `@dbml/core` library.
+A Manifest V3 Chrome extension ("DataGov Canvas" / 数据治理画图; called "DBML Studio" before 2026-10-13) that re-implements the core of dbdiagram.io offline: a DBML editor on the left, a live ER diagram on the right, bilingual UI (en / zh). It must not use dbdiagram.io / Holistics branding — it is an independent implementation that only uses the open-source `@dbml/core` library.
 
 Current status and the resume-from-here list live in `docs/项目现状与待办.md`; update it when wrapping up a session.
 
@@ -18,10 +18,10 @@ npm run e2e                         # GUI-only scenarios against dist/ in Chrome
 npx vitest run src/canvas/graph.test.ts        # single file
 npx vitest run -t "composite primary key"      # single test by name
 npm run typecheck
-npm run icons                       # regenerate public/icons/*.png (scripts/make-icons.mjs, no deps)
+npm run icons                       # render public/logo{,-small}.svg to public/icons/*.png (scripts/make-icons.mjs, uses Chrome for Testing)
 ```
 
-There is no linter; `npm run typecheck` (strict TS, `noUnusedLocals`/`noUnusedParameters`) is the static check. Everything in `public/` (manifest.json, background.js, _locales/, icons/) is copied verbatim into `dist/`.
+There is no linter; `npm run typecheck` (strict TS, `noUnusedLocals`/`noUnusedParameters`) is the static check. Everything in `public/` (manifest.json, background.js, _locales/, icons/, logo SVGs) is copied verbatim into `dist/`.
 
 Dependencies are pinned to exact versions. The `@codemirror/*` packages must resolve to a single copy of `@codemirror/state` and `@codemirror/view` (two copies break the editor at runtime with no type error) — after adding or bumping a CodeMirror package, check `npm ls @codemirror/state @codemirror/view --all`.
 

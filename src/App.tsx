@@ -59,6 +59,8 @@ export function App() {
 
   const lang: Lang = settings.lang ?? detectLang();
   const t = useCallback((k: MessageKey, v?: Record<string, string | number>) => translate(lang, k, v), [lang]);
+  // the tab title follows the UI language (Chrome's own name for the extension comes from _locales)
+  useEffect(() => { document.title = translate(lang, 'app.title'); }, [lang]);
   const displayMode: DisplayMode = settings.displayMode ?? 'all';
   const editorWidth = settings.editorWidth ?? 420;
 
@@ -454,7 +456,7 @@ export function App() {
       <div className="app">
         <header className="topbar">
           <div className="brand">
-            <img src="icons/icon32.png" width="22" height="22" alt="" />
+            <img src="logo-small.svg" width="22" height="22" alt="" />
             <span>{t('app.title')}</span>
           </div>
           <Dropdown label={t('diagram.list')}>

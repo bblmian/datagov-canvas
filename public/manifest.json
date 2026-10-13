@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extName__",
-  "short_name": "DBML Studio",
+  "short_name": "DataGov Canvas",
   "description": "__MSG_extDescription__",
   "version": "0.1.0",
   "default_locale": "en",

@@ -6,7 +6,7 @@ import { createContext, useCallback, useContext, useMemo, type ReactNode } from 
 export type Lang = 'en' | 'zh';
 
 const en = {
-  'app.title': 'DBML Studio',
+  'app.title': 'DataGov Canvas',
   'diagram.untitled': 'Untitled diagram',
   'diagram.list': 'My diagrams',
   'diagram.new': 'New diagram',
@@ -263,7 +263,7 @@ const en = {
 export type MessageKey = keyof typeof en;
 
 const zh: Record<MessageKey, string> = {
-  'app.title': 'DBML Studio',
+  'app.title': '数据治理画图',
   'diagram.untitled': '未命名关系图',
   'diagram.list': '我的关系图',
   'diagram.new': '新建关系图',

@@ -1,4 +1,4 @@
-# DBML Studio（Chrome 扩展）
+# 数据治理画图 DataGov Canvas（Chrome 扩展）
 
 一个离线运行的 Chrome 扩展：左边写 [DBML](https://dbml.dbdiagram.io/docs)，右边实时生成数据库 ER 图。功能上参照 dbdiagram.io 的核心部分自己实现，和 dbdiagram.io / Holistics 没有关系。DBML 的解析、SQL 导入导出用的是开源库 `@dbml/core`（Apache-2.0）。
 
@@ -31,5 +31,5 @@ npm run build
 npm run dev        # 以普通网页方式运行（存储自动改用 localStorage）
 npm test           # 单元测试（vitest）
 npm run typecheck
-npm run icons      # 重新生成 public/icons/*.png
+npm run icons      # 用 public/logo.svg、logo-small.svg 重新生成 public/icons/*.png
 ```

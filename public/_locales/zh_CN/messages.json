@@ -1,5 +1,11 @@
 {
-  "extName": { "message": "DBML Studio – 数据库关系图" },
-  "extDescription": { "message": "用 DBML 代码绘制数据库 ER 图。离线可用，中英双语，可导出 PNG、SVG、PDF 和 SQL。" },
-  "actionTitle": { "message": "打开 DBML Studio" }
+  "extName": {
+    "message": "数据治理画图 DataGov Canvas"
+  },
+  "extDescription": {
+    "message": "用 DBML 画数据治理图：ER 图、数据血缘和元数据。离线可用，中英双语，可导出 PNG、SVG、PDF 和 SQL。"
+  },
+  "actionTitle": {
+    "message": "打开数据治理画图"
+  }
 }
