@@ -234,8 +234,8 @@ Contact: zhubo3412@gmail.com
 - [x] Screenshots (zh + en) and the 440×280 promo tiles — `npm run shots`.
 - [x] Package: `npm run build && npm run package` → `datagov-canvas-<version>.zip` (contents of
       `dist/`, manifest at the root, no `.map` files; 0.1.0 is ~3 MB zipped).
-- [ ] Public GitHub repo `bblmian/datagov-canvas`, Pages from `/docs` serving the privacy policy;
-      open the URL in a private window before submitting.
+- [x] Public GitHub repo https://github.com/bblmian/datagov-canvas (2026-10-13), Pages from
+      `main` `/docs` serving the privacy policy.
 - [ ] Developer account: one-time US$5 registration and 2-Step Verification on the Google account.
 
 ### Staying clear of dbdiagram.io / Holistics
