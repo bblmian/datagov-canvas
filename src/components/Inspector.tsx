@@ -24,6 +24,9 @@ interface Props {
   activeView: string | null;
   onShowView(id: string | null): void;
   onClose(): void;
+  /** panel width chosen by dragging its left edge (undefined: follows the window) */
+  width?: number;
+  onResize?(width: number): void;
 }
 type PanelProps = Omit<Props, 'target'>;
 
@@ -91,17 +94,40 @@ function ColorPick({ value, colors, onChange, allowNone }: { value?: string; col
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="ins-row">
-      <span className="ins-label">{label}</span>
+      <span className="ins-label" title={label}>{label}</span>
       {children}
     </label>
   );
 }
 
-function Section({ title, children, extra }: { title: string; children: ReactNode; extra?: ReactNode }) {
+/** Open/closed sections, remembered while the app runs (so switching tables keeps your choice). */
+const sectionOpen = new Map<string, boolean>();
+
+const Chevron = () => (
+  <svg className="chev" viewBox="0 0 16 16" width="12" height="12" aria-hidden><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+);
+
+/**
+ * A titled block of the panel. With `count` it collapses: sections with content start open,
+ * empty ones closed (their `extra` action, e.g. "+ Index", opens them).
+ */
+function Section({ title, children, extra, count, id }: { title: string; children: ReactNode; extra?: ReactNode; count?: number; id?: string }) {
+  const key = id ?? title;
+  const collapsible = count !== undefined;
+  const [open, setOpenState] = useState(() => !collapsible || (sectionOpen.get(key) ?? count > 0));
+  const setOpen = (v: boolean) => { sectionOpen.set(key, v); setOpenState(v); };
+  const shown = !collapsible || open;
   return (
-    <section className="ins-section">
-      <div className="ins-section-head"><span>{title}</span>{extra}</div>
-      {children}
+    <section className={`ins-section${shown ? ' open' : ''}${collapsible ? ' collapsible' : ''}`}>
+      <div className="ins-section-head">
+        {collapsible ? (
+          <button className="ins-section-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+            <Chevron /><span>{title}</span>{count > 0 && <span className="ins-count">{count}</span>}
+          </button>
+        ) : <span className="ins-section-title">{title}</span>}
+        {extra && <span className="ins-section-action" onClickCapture={() => { if (collapsible && !open) setOpen(true); }}>{extra}</span>}
+      </div>
+      {shown && <div className="ins-section-body">{children}</div>}
     </section>
   );
 }
@@ -204,26 +230,31 @@ function FieldEditor({ f, first, last, run, focus, info, model, partial }: { f: 
   const flag = (key: 'pk' | 'notNull' | 'unique' | 'increment', label: string, title: MessageKey) => (
     <button className={`chip${f[key] ? ' on' : ''}`} title={t(title)} onClick={() => run((c) => E.updateField(c, f.id, { [key]: !f[key] }))}>{label}</button>
   );
-  const busy = open || f.defaultValue || f.note || checks.length || Object.keys(custom).length || Object.keys(meta).length || info?.fieldRef[f.id];
+  const busy = f.defaultValue || f.note || checks.length || Object.keys(custom).length || Object.keys(meta).length || info?.fieldRef[f.id];
   return (
-    <div className="ins-field">
-      <div className="ins-field-main">
+    <div className={`ins-field${open ? ' open' : ''}`}>
+      <div className="ins-field-line">
         <Input className="f-name" value={f.name} label={t('ins.column.name')} autoFocus={focus} onCommit={(v) => v.trim() && run((c) => E.updateField(c, f.id, { name: v }))} />
         <Input className="f-type" value={f.type} label={t('ins.column.type')} list="dbml-types" onCommit={(v) => v.trim() && run((c) => E.updateField(c, f.id, { type: v }))} />
-      </div>
-      <div className="ins-field-tools">
-        {flag('pk', 'PK', 'table.pk')}
-        {flag('notNull', 'NN', 'table.notNull')}
-        {flag('unique', 'UQ', 'table.unique')}
-        {flag('increment', 'AI', 'table.increment')}
-        <span className="grow" />
-        <button className={`icon-btn${busy ? ' on' : ''}`} title={t('ins.column.more')} onClick={() => setOpen(!open)}>⋯</button>
-        <button className="icon-btn" title={t('ins.moveUp')} disabled={first} onClick={() => run((c) => E.moveField(c, f.id, -1))}>↑</button>
-        <button className="icon-btn" title={t('ins.moveDown')} disabled={last} onClick={() => run((c) => E.moveField(c, f.id, 1))}>↓</button>
-        <button className="icon-btn danger" title={t('ins.column.delete')} onClick={() => run((c) => E.deleteField(c, f.id))}>×</button>
+        <span className="ins-flags">
+          {flag('pk', 'PK', 'table.pk')}
+          {flag('notNull', 'NN', 'table.notNull')}
+          {flag('unique', 'UQ', 'table.unique')}
+          {flag('increment', 'AI', 'table.increment')}
+        </span>
+        <span className="ins-field-actions">
+          <button className="icon-btn danger reveal" title={t('ins.column.delete')} onClick={() => run((c) => E.deleteField(c, f.id))}>×</button>
+          <button className={`icon-btn more${busy ? ' has' : ''}${open ? ' on' : ''}`} title={t('ins.column.more')} aria-expanded={open} onClick={() => setOpen(!open)}>⋯</button>
+        </span>
       </div>
       {open && (
         <div className="ins-field-more">
+          <Row label={t('ins.column.order')}>
+            <span className="ins-actions left">
+              <button className="icon-btn" title={t('ins.moveUp')} disabled={first} onClick={() => run((c) => E.moveField(c, f.id, -1))}>↑</button>
+              <button className="icon-btn" title={t('ins.moveDown')} disabled={last} onClick={() => run((c) => E.moveField(c, f.id, 1))}>↓</button>
+            </span>
+          </Row>
           <Row label={t('table.default')}>
             <div className="ins-default">
               <select value={f.defaultValue ? kind : ''} title={t('ins.column.defaultKind')} onChange={(e) => (e.target.value ? setDefault(unwrapDefault(f.defaultValue), e.target.value as DefaultKind) : run((c) => E.updateField(c, f.id, { defaultValue: '' })))}>
@@ -299,7 +330,7 @@ function IndexEditor({ blockId, columns, info, run }: { blockId: string; columns
     setAdding(false);
   };
   return (
-    <Section title={t('ins.indexes')} extra={!adding && <button className="link" onClick={() => { setAdding(true); setCols([]); setExprText(''); setUnique(false); }}>+ {t('ins.index.add')}</button>}>
+    <Section title={t('ins.indexes')} count={indexes.length} id={`ix:${blockId}`} extra={!adding && <button className="link" onClick={() => { setAdding(true); setCols([]); setExprText(''); setUnique(false); }}>+ {t('ins.index.add')}</button>}>
       {indexes.length === 0 && !adding && <div className="ins-empty">{t('ins.index.none')}</div>}
       {indexes.map((ix, i) => (
         <div key={i} className="ins-index-wrap">
@@ -361,7 +392,7 @@ function ChecksEditor({ blockId, info, run }: { blockId: string; info: EditInfo 
     setName('');
   };
   return (
-    <Section title={t('ins.checks')}>
+    <Section title={t('ins.checks')} count={checks.length} id={`ck:${blockId}`}>
       {checks.map((ck, i) => (
         <div key={i} className="ins-check">
           <Input className="mono" value={ck.expression} label={t('ins.check')} onCommit={(v) => v.trim() && run((c) => E.updateCheck(c, blockId, i, { expression: v }))} />
@@ -524,7 +555,7 @@ function RecordsEditor({ table, info, run, model }: { table: DTable; info: EditI
   const save = (i: number, columns: string[], raw: string[][], example?: boolean) => run((c) => E.setRecords(c, table.id, i, { columns, rows: raw, example }));
   return (
     // one Records block per table (DBML rule)
-    <Section title={t('ins.records')} extra={!picking && !blocks.length && <button className="link" onClick={() => { setCols(all); setPicking(true); }}>+ {t('ins.records.add')}</button>}>
+    <Section title={t('ins.records')} count={blocks[0]?.rows.length ?? 0} id="records" extra={!picking && !blocks.length && <button className="link" onClick={() => { setCols(all); setPicking(true); }}>+ {t('ins.records.add')}</button>}>
       {blocks.length === 0 && !picking && <div className="ins-empty">{t('ins.records.none')}</div>}
       {picking && (
         <div className="ins-index-form">
@@ -649,34 +680,28 @@ function TablePanel({ table, ...props }: { table: DTable } & PanelProps) {
   const [newRef, setNewRef] = useState(false);
   const refs = model.refs.filter((r) => r.from.tableId === table.id || r.to.tableId === table.id);
   const injected = table.fields.filter((f) => info?.injected[f.id]);
+  const tableProps = info?.metadata[`Table:${table.id}`]?.custom ?? {};
+  const moreCount = (table.alias ? 1 : 0) + (info?.tables[table.id]?.partials.length ?? 0) + Object.keys(tableProps).length;
   return (
     <>
       <Row label={t('ins.name')}>
         <Input value={table.schema ? `${table.schema}.${table.name}` : table.name} autoFocus={focus === 'name'} label={t('ins.name')}
           onCommit={(v) => v.trim() && run((c) => E.updateTable(c, table.id, { name: v }))} />
       </Row>
-      <Row label={t('ins.alias')}>
-        <Input value={table.alias ?? ''} placeholder={t('ins.optional')} onCommit={(v) => run((c) => E.updateTable(c, table.id, { alias: v }))} />
-      </Row>
       <Row label={t('ins.note')}>
-        <Input multiline value={table.note ?? ''} onCommit={(v) => run((c) => E.updateTable(c, table.id, { note: v }))} />
+        <Input multiline value={table.note ?? ''} placeholder={t('ins.optional')} onCommit={(v) => run((c) => E.updateTable(c, table.id, { note: v }))} />
       </Row>
       <Row label={t('ins.headerColor')}>
         <ColorPick value={table.headerColor} colors={COLORS} onChange={(v) => run((c) => E.updateTable(c, table.id, { headerColor: v }))} />
       </Row>
-      <PartialChips table={table} {...props} />
-      <Section title={t('ins.props')}>
-        <PropsEditor values={info?.metadata[`Table:${table.id}`]?.custom ?? {}} onCommit={(v) => run((c) => E.setMetadata(c, 'Table', table.id, v))} />
-      </Section>
       <FieldList blockId={table.id} {...props} />
       {injected.length > 0 && (
-        <Section title={t('ins.partial.injected')}>
+        <Section title={t('ins.partial.injected')} count={injected.length} id="injected">
           {injected.map((f) => <InjectedField key={f.id} f={f} partial={info!.injected[f.id]} {...props} />)}
         </Section>
       )}
       <IndexEditor blockId={table.id} columns={table.fields.map((f) => f.name)} info={info} run={run} />
-      <ChecksEditor blockId={table.id} info={info} run={run} />
-      <Section title={t('ins.relationships')} extra={!newRef && <button className="link" onClick={() => setNewRef(true)}>+ {t('ins.ref.new')}</button>}>
+      <Section title={t('ins.relationships')} count={refs.length} id="refs" extra={!newRef && <button className="link" onClick={() => setNewRef(true)}>+ {t('ins.ref.new')}</button>}>
         {refs.length === 0 && !newRef && <div className="ins-empty">{t('ins.ref.noneHint')}</div>}
         {refs.map((r) => (
           <button key={r.id} className="ins-link-row" onClick={() => onSelect({ kind: 'ref', id: r.id })}>
@@ -686,7 +711,17 @@ function TablePanel({ table, ...props }: { table: DTable } & PanelProps) {
         {newRef && <NewRefForm table={table} model={model} run={run} onDone={() => setNewRef(false)} />}
       </Section>
       <DepsSection table={table} {...props} />
+      <ChecksEditor blockId={table.id} info={info} run={run} />
       <RecordsEditor table={table} info={info} run={run} model={model} />
+      <Section title={t('ins.more')} count={moreCount} id="tmore">
+        <Row label={t('ins.alias')}>
+          <Input value={table.alias ?? ''} placeholder={t('ins.optional')} onCommit={(v) => run((c) => E.updateTable(c, table.id, { alias: v }))} />
+        </Row>
+        <PartialChips table={table} {...props} />
+        <Row label={t('ins.props')}>
+          <PropsEditor values={tableProps} onCommit={(v) => run((c) => E.setMetadata(c, 'Table', table.id, v))} />
+        </Row>
+      </Section>
       <div className="ins-footer">
         <button className="btn danger" onClick={() => { run((c) => E.deleteTable(c, table.id)); onClose(); }}>{t('ins.table.delete')}</button>
       </div>
@@ -707,7 +742,7 @@ function NotePanel({ noteId, ...props }: { noteId: string } & PanelProps) {
       <Row label={t('ins.name')}><Input value={n.name} onCommit={(v) => v.trim() && rename(v)} /></Row>
       <Row label={t('ins.content')}><Input multiline value={n.content} onCommit={(v) => run((c) => E.updateNote(c, noteId, { content: v }))} /></Row>
       <Row label={t('ins.color')}><ColorPick value={n.color} colors={NOTE_COLORS} allowNone onChange={(v) => run((c) => E.updateNote(c, noteId, { color: v }))} /></Row>
-      <Section title={t('ins.props')}>
+      <Section title={t('ins.props')} count={Object.keys(props.info?.metadata[`Note:${noteId}`]?.custom ?? {}).length} id="nprops">
         <PropsEditor values={props.info?.metadata[`Note:${noteId}`]?.custom ?? {}} onCommit={(v) => run((c) => E.setMetadata(c, 'Note', noteId, v))} />
       </Section>
       <div className="ins-footer">
@@ -730,7 +765,7 @@ function GroupPanel({ groupId, ...props }: { groupId: string } & PanelProps) {
       </Row>
       <Row label={t('ins.color')}><ColorPick value={g.color} colors={COLORS} onChange={(v) => run((c) => E.updateGroup(c, groupId, { color: v }))} /></Row>
       <Row label={t('ins.note')}><Input multiline value={g.note ?? ''} onCommit={(v) => run((c) => E.updateGroup(c, groupId, { note: v }))} /></Row>
-      <Section title={t('ins.props')}>
+      <Section title={t('ins.props')} count={Object.keys(props.info?.metadata[`TableGroup:${groupId}`]?.custom ?? {}).length} id="gprops">
         <PropsEditor values={props.info?.metadata[`TableGroup:${groupId}`]?.custom ?? {}} onCommit={(v) => run((c) => E.setMetadata(c, 'TableGroup', groupId, v))} />
       </Section>
       <Section title={t('ins.group.members')}>
@@ -835,7 +870,7 @@ function ProjectPanel({ model, info, run }: PanelProps) {
       </Row>
       <Row label={t('ins.note')}><Input multiline value={p.note ?? ''} onCommit={(v) => run((c) => E.setProject(c, { note: v }))} /></Row>
       <datalist id="dbml-dbtypes">{E.DATABASE_TYPES.map((x) => <option key={x} value={x} />)}</datalist>
-      <Section title={t('ins.props')}>
+      <Section title={t('ins.props')} count={Object.keys(info?.projectCustom ?? {}).length} id="pprops">
         <PropsEditor values={info?.projectCustom ?? {}} onCommit={(v) => run((c) => E.setProject(c, { custom: v }))} />
       </Section>
       {info?.project && (
@@ -989,7 +1024,7 @@ function DepPanel({ depId, model, info, run, onClose }: { depId: string } & Pane
           </div>
         )}
       </Section>
-      <Section title={t('ins.props')}>
+      <Section title={t('ins.props')} count={Object.keys(info?.deps[depId]?.metadata ?? {}).length} id="dprops">
         {/* values may be strings, numbers, booleans or null: each keeps its kind (see literalFor) */}
         <PropsEditor values={Object.fromEntries(Object.entries(info?.deps[depId]?.metadata ?? {}).map(([k, v]) => [k, literalDisplay(v)]))}
           onCommit={(v) => {
@@ -1018,7 +1053,7 @@ function DepsSection({ table, model, run, onSelect }: { table: DTable } & PanelP
     setAdding(false);
   };
   return (
-    <Section title={t('ins.deps')} extra={!adding && <button className="link" onClick={() => setAdding(true)}>+ {t('ins.dep.new')}</button>}>
+    <Section title={t('ins.deps')} count={deps.length} id="deps" extra={!adding && <button className="link" onClick={() => setAdding(true)}>+ {t('ins.dep.new')}</button>}>
       {deps.length === 0 && !adding && <div className="ins-empty">{t('ins.dep.noneHint')}</div>}
       {deps.map((d) => (
         <button key={d.id} className="ins-link-row" onClick={() => onSelect({ kind: 'dep', id: d.id })}>
@@ -1052,6 +1087,35 @@ function DepsSection({ table, model, run, onSelect }: { table: DTable } & PanelP
 
 // ---- panel ------------------------------------------------------------------------------
 
+/** Drag handle on the panel's left edge; reports the new width when the drag ends. */
+function Resizer({ width, onResize }: { width?: number; onResize(w: number): void }) {
+  const { t } = useI18n();
+  const [active, setActive] = useState(false);
+  const start = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const panel = (e.currentTarget as HTMLElement).parentElement!;
+    const startX = e.clientX;
+    const startW = width ?? panel.getBoundingClientRect().width;
+    let w = startW;
+    setActive(true);
+    const move = (ev: PointerEvent) => {
+      w = Math.round(Math.min(Math.max(280, startW + startX - ev.clientX), Math.min(620, window.innerWidth * 0.6)));
+      panel.style.width = `${w}px`;
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.classList.remove('resizing');
+      setActive(false);
+      onResize(w);
+    };
+    document.body.classList.add('resizing');
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return <div className={`ins-resizer${active ? ' on' : ''}`} role="separator" aria-orientation="vertical" title={t('ins.resize')} onPointerDown={start} />;
+}
+
 const TITLES: Record<InspectTarget['kind'], MessageKey> = {
   table: 'ins.title.table', ref: 'ins.title.ref', note: 'ins.title.note', group: 'ins.title.group', enums: 'ins.title.enums',
   partials: 'ins.title.partials', project: 'ins.title.project', views: 'ins.title.views', dep: 'ins.title.dep',
@@ -1073,10 +1137,12 @@ export function Inspector(props: Props) {
   else if (target.kind === 'views') body = <ViewsPanel {...props} />;
 
   return (
-    <aside className="inspector" onKeyDown={(e) => { if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) props.onClose(); }}>
+    <aside className="inspector" style={props.width ? { width: props.width } : undefined}
+      onKeyDown={(e) => { if (e.key === 'Escape' && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) props.onClose(); }}>
+      {props.onResize && <Resizer width={props.width} onResize={props.onResize} />}
       <header className="ins-head">
-        <span>{t(TITLES[target.kind])}</span>
-        {table && <code className="ins-sub">{table.id}</code>}
+        <span className="ins-kind">{t(TITLES[target.kind])}</span>
+        <span className="ins-sub">{table ? table.id : ''}</span>
         <button className="icon-btn" title={t('ins.close')} onClick={props.onClose}>×</button>
       </header>
       <div className="ins-body">

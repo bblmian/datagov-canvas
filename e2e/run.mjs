@@ -5,6 +5,7 @@
 // set E2E_CHROME to its executable, or install it with `npx playwright-core install chromium`.
 // E2E_URL instead opens the built app from a web server (e.g. `npx vite preview`), which works in
 // any Chrome, including the branded one; storage then falls back to localStorage.
+// HEADED=1 shows the browser window; DPR=2 emulates a Retina screen.
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -46,8 +47,8 @@ for (const name of wanted) {
   // a fresh profile per scenario: each starts from the sample diagram
   const ctx = await chromium.launchPersistentContext('', {
     // English UI whatever the browser's language (the scenarios look for English labels)
-    executablePath: exe, headless: true, viewport: { width: 1440, height: 860 }, locale: 'en-US',
-    args: url ? ['--headless=new'] : [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`, '--headless=new'],
+    executablePath: exe, headless: !process.env.HEADED, viewport: { width: 1440, height: 860 }, deviceScaleFactor: +(process.env.DPR ?? 1), locale: 'en-US',
+    args: [...(url ? [] : [`--disable-extensions-except=${dist}`, `--load-extension=${dist}`]), ...(process.env.HEADED ? [] : ['--headless=new'])],
   });
   let appUrl = url;
   if (!appUrl) {
@@ -65,10 +66,17 @@ for (const name of wanted) {
     const r = await Promise.race([page.evaluate(() => 1), new Promise((res) => setTimeout(() => res('TIMEOUT'), 5000))]);
     if (r === 'TIMEOUT') throw new Error(`page froze at ${label}`);
   };
+  // The editing scenarios check what each control writes, not progressive disclosure: this opens
+  // every collapsed inspector section as it appears (e2e/scenarios/panel.mjs covers the collapsing).
+  const expandSections = () => page.evaluate(() => {
+    const open = () => document.querySelectorAll('.inspector .ins-section-toggle[aria-expanded="false"]').forEach((b) => b.click());
+    new MutationObserver(open).observe(document.body, { childList: true, subtree: true });
+    open();
+  });
   console.log(`\n=== ${name}`);
   try {
     const { default: run } = await import(join(root, 'e2e', 'scenarios', `${name}.mjs`));
-    const n = await run({ page, alive, outDir });
+    const n = await run({ page, alive, outDir, expandSections });
     failed += n;
     console.log(n ? `=== ${name}: ${n} FAILED` : `=== ${name}: passed`);
   } catch (e) {

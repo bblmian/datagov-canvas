@@ -1,5 +1,6 @@
 // Dependencies, inactive refs, example records, custom properties (table/column/group/note/project/dep) — GUI only.
-export default async function ({ page, alive, outDir }) {
+export default async function ({ page, alive, outDir, expandSections }) {
+  await expandSections();
   const dbml = () => page.evaluate(() => [...document.querySelectorAll('.cm-line')].map((l) => l.textContent).join('\n'));
   const settle = () => page.waitForTimeout(300);
   let failures = 0;

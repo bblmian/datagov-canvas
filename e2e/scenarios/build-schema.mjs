@@ -1,5 +1,6 @@
 // Builds a schema using only the graphical editor, checking the DBML text after each step.
-export default async function ({ page, alive, outDir }) {
+export default async function ({ page, alive, outDir, expandSections }) {
+  await expandSections();
   const dbml = () => page.evaluate(() => [...document.querySelectorAll('.cm-line')].map((l) => l.textContent).join('\n'));
   const status = () => page.textContent('.status');
   const settle = () => page.waitForTimeout(250);
@@ -136,6 +137,7 @@ export default async function ({ page, alive, outDir }) {
   await check('table note and colour', src.includes("Table posts [note: 'Blog posts', headercolor: #16a34a] {"), src);
 
   // 9. delete a column, then undo from the canvas toolbar
+  await ins.locator('.ins-field').nth(2).hover();
   await ins.locator('.ins-field').nth(2).locator('button[title="Delete column"]').click(); await settle();
   await check('column deleted', !(await dbml()).includes('status post_status'));
   await page.locator('.edit-tools button[title^="Undo"]').click(); await settle();

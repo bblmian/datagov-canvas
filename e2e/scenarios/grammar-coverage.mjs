@@ -24,7 +24,8 @@ Table orders [dep: <- users] {
 }
 `;
 
-export default async function ({ page, alive, outDir }) {
+export default async function ({ page, alive, outDir, expandSections }) {
+  await expandSections();
   const covered = new Set();
   let failures = 0;
   const dbml = () => page.evaluate(() => [...document.querySelectorAll('.cm-line')].map((l) => l.textContent).join('\n'));
@@ -113,7 +114,7 @@ export default async function ({ page, alive, outDir }) {
   }, (s) => s.includes('email varchar [not null, unique]') && s.includes('id integer [pk, increment]') && s.includes("nick varchar [default: 'anon', check: `length(nick) > 2`]"));
 
   await step('custom properties of a table and a column (Metadata)', ['metadata'], async () => {
-    await addProp(section('Custom properties'), 'owner', 'auth team'); await settle();
+    await addProp(section('More'), 'owner', 'auth team'); await settle();
     await addProp(field('nick'), 'pii', 'no');
   }, (s) => s.includes("Metadata Table members {\n  owner: 'auth team'\n}") && s.includes("Metadata Column members.nick {\n  pii: 'no'\n}"));
 

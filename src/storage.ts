@@ -31,6 +31,8 @@ export interface Settings {
   showMinimap?: boolean;
   /** last choice in the PDF export dialog */
   pdfLayout?: PdfLayout;
+  /** property panel width set by dragging its edge */
+  inspectorWidth?: number;
 }
 
 const hasChromeStorage = typeof chrome !== 'undefined' && !!chrome.storage?.local;

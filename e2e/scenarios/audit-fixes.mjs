@@ -54,7 +54,8 @@ Dep d {
 }
 `;
 
-export default async function ({ page, alive, outDir }) {
+export default async function ({ page, alive, outDir, expandSections }) {
+  await expandSections();
   let failures = 0;
   const dbml = () => page.evaluate(() => [...document.querySelectorAll('.cm-line')].map((l) => l.textContent).join('\n'));
   const settle = () => page.waitForTimeout(300);
@@ -178,6 +179,8 @@ export default async function ({ page, alive, outDir }) {
   }, (s) => s.includes('  owner_id timestamptz [default: `now()`]'));
 
   await step('sticky note colour none', async () => {
+    // close the panel first: the note sits at the canvas edge, half under the docked inspector
+    await ins.locator('.ins-head .icon-btn').click(); await settle();
     await page.locator('.sticky-head', { hasText: 'memo' }).dblclick(); await page.waitForSelector('.inspector textarea'); await settle();
     await ins.locator('.swatch.clear').click();
   }, (s) => s.includes('Note memo [color: none] {'));

@@ -1,6 +1,7 @@
 // Second GUI-only scenario: Project, partials, alias, index details, checks, composite/named/coloured
 // refs and sample data — everything that used to need typed DBML.
-export default async function ({ page, alive, outDir }) {
+export default async function ({ page, alive, outDir, expandSections }) {
+  await expandSections();
   const dbml = () => page.evaluate(() => [...document.querySelectorAll('.cm-line')].map((l) => l.textContent).join('\n'));
   const settle = () => page.waitForTimeout(250);
   let failures = 0;
@@ -105,8 +106,8 @@ export default async function ({ page, alive, outDir }) {
   const stroke = await page.evaluate(() => [...document.querySelectorAll('.react-flow__edge .rel-line')].map((p) => getComputedStyle(p).stroke));
   await check('coloured edge drawn', stroke.includes('rgb(220, 38, 38)'), JSON.stringify(stroke));
 
-  // 8. sample data for users
-  await page.locator('.inspector .ins-head .icon-btn').click();
+  // 8. sample data for users (clicking the empty canvas above already closed the inspector)
+  await check('clicking the empty canvas closes the inspector', (await ins.count()) === 0);
   await openTable('users');
   const recSec = ins.locator('.ins-section', { hasText: 'Sample data' });
   await recSec.locator('.ins-section-head button.link').click();

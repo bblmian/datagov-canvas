@@ -7,18 +7,34 @@ import { visibleFields } from './geometry';
 import { useCanvas, useHighlight } from './highlight';
 
 /**
- * Invisible connection points on both sides of a row; edges choose a side at build time. On column
- * rows the source handles show as dots on hover: dragging one onto another column creates a Ref.
+ * Invisible edge anchors on both sides of a row; edges choose a side at build time. These are plain
+ * elements, not React Flow `<Handle>`s: React Flow measures anything with the `source` / `target`
+ * class and `data-handleid` / `data-handlepos` inside a node, while every `<Handle>` subscribes to
+ * its store — four per column was ~3,100 subscriptions re-run on every frame of a drag.
  */
-function SideHandles({ owner, connectable = false }: { owner: string; connectable?: boolean }) {
-  const { t } = useI18n();
-  const src = connectable ? { isConnectableStart: true, isConnectableEnd: false, className: 'hd conn', title: t('table.dragToRef') } : { isConnectable: false, className: 'hd' };
+function Anchors({ owner }: { owner: string }) {
   return (
     <>
-      <Handle type="source" id={handleId(owner, 's', 'l')} position={Position.Left} {...src} />
-      <Handle type="target" id={handleId(owner, 't', 'l')} position={Position.Left} isConnectable={false} className="hd" />
-      <Handle type="source" id={handleId(owner, 's', 'r')} position={Position.Right} {...src} />
-      <Handle type="target" id={handleId(owner, 't', 'r')} position={Position.Right} isConnectable={false} className="hd" />
+      <i className="anchor source" data-handleid={handleId(owner, 's', 'l')} data-handlepos="left" />
+      <i className="anchor target" data-handleid={handleId(owner, 't', 'l')} data-handlepos="left" />
+      <i className="anchor source" data-handleid={handleId(owner, 's', 'r')} data-handlepos="right" />
+      <i className="anchor target" data-handleid={handleId(owner, 't', 'r')} data-handlepos="right" />
+    </>
+  );
+}
+
+/**
+ * The draggable dots of the row under the pointer (mounted only while it is hovered): dragging one
+ * onto another column creates a Ref (or a Dep in Dep mode). They reuse the anchors' handle ids,
+ * so React Flow starts the connection from the anchor it has already measured.
+ */
+function ConnectDots({ owner }: { owner: string }) {
+  const { t } = useI18n();
+  const props = { type: 'source', isConnectableStart: true, isConnectableEnd: false, className: 'hd conn', title: t('table.dragToRef') } as const;
+  return (
+    <>
+      <Handle id={handleId(owner, 's', 'l')} position={Position.Left} {...props} />
+      <Handle id={handleId(owner, 's', 'r')} position={Position.Right} {...props} />
     </>
   );
 }
@@ -68,15 +84,16 @@ const FieldRow = memo(function FieldRow({ field: f, tableId }: { field: DField; 
   const { t } = useI18n();
   const { highlight } = useCanvas();
   const hl = useHighlight((h) => h.activeFields.has(f.id));
-  const [tip, setTip] = useState(false);
+  const [hover, setHover] = useState(false);
   return (
     <div
       className={`row${hl ? ' hl' : ''}`}
       data-field-id={f.id}
-      onMouseEnter={() => { highlight.setHover({ tableId, fieldId: f.id }); setTip(true); }}
-      onMouseLeave={() => { highlight.setHover({ tableId }); setTip(false); }}
+      onMouseEnter={() => { highlight.setHover({ tableId, fieldId: f.id }); setHover(true); }}
+      onMouseLeave={() => { highlight.setHover({ tableId }); setHover(false); }}
     >
-      <SideHandles owner={f.id} connectable />
+      <Anchors owner={f.id} />
+      {hover && <ConnectDots owner={f.id} />}
       <span className="row-icon">{f.pk ? <KeyIcon /> : f.isRef ? <span className="fk">FK</span> : null}</span>
       <span className={`row-name${f.pk ? ' pk' : ''}`}>{f.name}</span>
       <span className="row-type">
@@ -84,7 +101,7 @@ const FieldRow = memo(function FieldRow({ field: f, tableId }: { field: DField; 
         {f.notNull && !f.pk && <span className="nn" title={t('table.notNull')}>NN</span>}
       </span>
       {f.note && <span className="row-note" aria-hidden />}
-      {tip && <FieldTip field={f} />}
+      {hover && <FieldTip field={f} />}
     </div>
   );
 });
@@ -96,6 +113,7 @@ export const TableNodeView = memo(function TableNodeView({ data, selected }: Nod
   const fields = visibleFields(table, mode);
   const dim = useHighlight((h) => h.focusing && h.hoverTableId !== table.id && !table.fields.some((f) => h.activeFields.has(f.id)));
   const style = { '--hc': table.headerColor, '--hc-text': readableOn(table.headerColor) } as CSSProperties;
+  const [headHover, setHeadHover] = useState(false);
 
   return (
     <div
@@ -105,8 +123,9 @@ export const TableNodeView = memo(function TableNodeView({ data, selected }: Nod
       onMouseEnter={() => highlight.setHover({ tableId: table.id })}
       onMouseLeave={() => highlight.setHover({})}
     >
-      <div className="tbl-head" title={table.note}>
-        <SideHandles owner={table.id} connectable={connectKind === 'dep'} />
+      <div className="tbl-head" title={table.note} onMouseEnter={() => setHeadHover(true)} onMouseLeave={() => setHeadHover(false)}>
+        <Anchors owner={table.id} />
+        {headHover && connectKind === 'dep' && <ConnectDots owner={table.id} />}
         <span className="tbl-name">
           {table.schema && <span className="tbl-schema">{table.schema}.</span>}
           {table.name}

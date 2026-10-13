@@ -174,16 +174,22 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(props, 
           if (tn) extra.push({ type: 'position', id: tid, position: { x: tn.position.x + dx, y: tn.position.y + dy }, dragging: c.dragging });
         }
       }
-      const next = syncGroups(applyNodeChanges([...changes, ...extra], prev));
-      // Persist once a drag ends.
-      if (changes.some((c) => c.type === 'position' && c.dragging === false)) {
-        const map = { ...positionsRef.current };
-        for (const n of next) if (n.type !== 'tablegroup') map[n.id] = { x: Math.round(n.position.x), y: Math.round(n.position.y) };
-        queueMicrotask(() => onPositionsChange(map));
-      }
-      return next;
+      return syncGroups(applyNodeChanges([...changes, ...extra], prev));
     });
-  }, [onPositionsChange]);
+    // Persisted after the drag has rendered (effect below), never from inside the updater above:
+    // React may re-run an updater whenever it rebases state, and a side effect there once looped
+    // forever (save → rebuild → re-run → save …) and froze the page on drag end.
+    if (changes.some((c) => c.type === 'position' && c.dragging === false)) persistDrag.current = true;
+  }, []);
+
+  const persistDrag = useRef(false);
+  useEffect(() => {
+    if (!persistDrag.current) return;
+    persistDrag.current = false;
+    const map = { ...positionsRef.current };
+    for (const n of nodes) if (n.type !== 'tablegroup') map[n.id] = { x: Math.round(n.position.x), y: Math.round(n.position.y) };
+    onPositionsChange(map);
+  }, [nodes, onPositionsChange]);
 
   // Unchanged edges keep their identity (see buildEdges), so a drag only re-renders the moved table's edges.
   const prevEdges = useRef<AnyEdge[]>([]);
@@ -295,6 +301,32 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(props, 
     return false;
   }, []);
 
+  // Trash: while a table or sticky note is dragged, a bin replaces the bottom-left toolbar;
+  // dropping onto it deletes what is being dragged (⌘Z or the toast's Undo brings it back).
+  const [trash, setTrash] = useState<null | { over: boolean }>(null);
+  const trashRef = useRef<HTMLDivElement>(null);
+  const overTrash = (e: { clientX: number; clientY: number }) => {
+    const r = trashRef.current?.getBoundingClientRect();
+    // a little slack around the bin, so a hurried drop still lands
+    return !!r && e.clientX >= r.left - 12 && e.clientX <= r.right + 12 && e.clientY >= r.top - 12 && e.clientY <= r.bottom + 12;
+  };
+  const onNodeDragStart = useCallback((_: unknown, n: AnyNode) => { if (n.type !== 'tablegroup') setTrash({ over: false }); }, []);
+  const onNodeDrag = useCallback((e: React.MouseEvent) => {
+    const over = overTrash(e);
+    setTrash((cur) => (cur && cur.over !== over ? { over } : cur));
+  }, []);
+  const onNodeDragStop = useCallback((e: React.MouseEvent, _n: AnyNode, dragged: AnyNode[]) => {
+    if (overTrash(e)) {
+      propsRef.current.onDeleteElements({
+        tables: dragged.filter((n) => n.type === 'table').map((n) => n.id),
+        notes: dragged.filter((n) => n.type === 'note').map((n) => n.id),
+      });
+    }
+    setTrash(null);
+  }, []);
+  // clicking empty canvas puts the property panel away
+  const onPaneClick = useCallback(() => { if (propsRef.current.inspecting) propsRef.current.onInspect(null); }, []);
+
   return (
     <CanvasContext.Provider value={ctx}>
       <ReactFlow
@@ -319,6 +351,10 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(props, 
         proOptions={PRO_OPTIONS}
         deleteKeyCode={DELETE_KEYS}
         onBeforeDelete={onBeforeDelete}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
+        onPaneClick={onPaneClick}
         onlyRenderVisibleElements={false}
       >
         <Panel position="top-left" className="toolbar edit-tools">
@@ -361,7 +397,17 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(props, 
         </Panel>
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} color="var(--grid)" />
         {showMinimap && <MiniMap pannable zoomable nodeStrokeWidth={2} nodeColor={minimapColor} />}
-        <Panel position="bottom-left" className="toolbar">
+        {trash && (
+          <Panel position="bottom-left" className="trash-panel">
+            <div ref={trashRef} className={`trash-zone${trash.over ? ' over' : ''}`} role="status">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" />
+              </svg>
+              <span>{trash.over ? t('canvas.trash.release') : t('canvas.trash.drop')}</span>
+            </div>
+          </Panel>
+        )}
+        <Panel position="bottom-left" className={`toolbar view-tools${trash ? ' hidden' : ''}`}>
           <button title={t('canvas.zoomIn')} onClick={() => flow.zoomIn({ duration: 150 })}><Icon d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3M11 8v6M8 11h6" /></button>
           <button title={t('canvas.zoomOut')} onClick={() => flow.zoomOut({ duration: 150 })}><Icon d="M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM21 21l-4.3-4.3M8 11h6" /></button>
           <button title={t('canvas.fit')} onClick={() => flow.fitView({ padding: 0.15, maxZoom: 1, duration: 300 })}><Icon d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></button>

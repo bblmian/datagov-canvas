@@ -29,7 +29,7 @@ const ERROR_DELAY = 400;
 const SAVE_DELAY = 400;
 const NEW_DIAGRAM_SOURCE = 'Table table_name {\n  id integer [pk, increment]\n  name varchar\n}\n';
 
-type Toast = { text: string; kind: 'info' | 'error' };
+type Toast = { text: string; kind: 'info' | 'error'; action?: { label: string; run(): void } };
 
 export function App() {
   const [ready, setReady] = useState(false);
@@ -67,10 +67,10 @@ export function App() {
     void storage.saveSettings(patch);
   }, []);
 
-  const showToast = useCallback((text: string, kind: Toast['kind'] = 'info') => setToast({ text, kind }), []);
+  const showToast = useCallback((text: string, kind: Toast['kind'] = 'info', action?: Toast['action']) => setToast({ text, kind, action }), []);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), toast.kind === 'error' ? 6000 : 2500);
+    const id = setTimeout(() => setToast(null), toast.kind === 'error' || toast.action ? 6000 : 2500);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -290,8 +290,14 @@ export function App() {
   const onDeleteElements = useCallback((ids: { tables: string[]; notes: string[] }) => {
     for (const id of ids.tables) runEdit((c) => (c.model.tables.some((x) => x.id === id) ? E.deleteTable(c, id) : { source: c.source }));
     for (const id of ids.notes) runEdit((c) => (c.model.notes.some((x) => x.id === id) ? E.deleteNote(c, id) : { source: c.source }));
+    const n = ids.tables.length + ids.notes.length;
+    if (n) {
+      const name = ids.tables[0] ?? ids.notes[0].replace(/^note:/, '');
+      // deleting is one step back in the editor's history: offer it right away
+      showToast(n === 1 ? t('canvas.deleted.one', { name }) : t('canvas.deleted.many', { count: n }), 'info', { label: t('canvas.undo.short'), run: () => editor.current?.undo() });
+    }
     setInspect(null);
-  }, [runEdit]);
+  }, [runEdit, showToast, t]);
   const onGroupTables = useCallback((tableIds: string[]) => runEdit((c) => E.addGroup(c, tableIds), { then: (r) => setInspect({ kind: 'group', id: r.created }) }), [runEdit]);
   const onInspect = useCallback((target: InspectTarget | null) => { setFocus(null); setInspect(target); }, []);
 
@@ -574,13 +580,20 @@ export function App() {
               activeView={view ? view.id : null}
               onShowView={onShowView}
               onClose={() => setInspect(null)}
+              width={settings.inspectorWidth}
+              onResize={(w) => updateSettings({ inspectorWidth: w })}
             />
           )}
         </main>
 
         {importing && <ImportDialog onSubmit={doImport} onClose={() => setImporting(false)} />}
         {pdfDialog && <PdfExportDialog initial={settings.pdfLayout ?? 'a4'} onSubmit={(l) => void exportPdf(l)} onClose={() => setPdfDialog(false)} />}
-        {toast && <div className={`toast ${toast.kind}`} role="status">{toast.text}</div>}
+        {toast && (
+          <div className={`toast ${toast.kind}`} role="status">
+            {toast.text}
+            {toast.action && <button className="toast-action" onClick={() => { toast.action!.run(); setToast(null); }}>{toast.action.label}</button>}
+          </div>
+        )}
       </div>
     </I18nProvider>
   );
