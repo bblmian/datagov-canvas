@@ -108,7 +108,7 @@ Draws and edits database and data-governance diagrams (ER diagrams, data lineage
 | Screenshot 3 [RECOMMENDED] | 1280×800 | ✅ Ready | `store-assets/<zh|en>/3-property-panel.png` |
 | Screenshot 4 | 1280×800 | ✅ Ready | `store-assets/<zh|en>/4-import-sql.png` |
 | Small Promo Tile [RECOMMENDED] | 440×280 | ✅ Ready | `store-assets/<zh|en>/promo-small-440x280.png` |
-| Marquee Promo Tile | 1400×560 | ⬜ Not needed for now | |
+| Marquee Promo Tile | 1400×560 | ✅ Ready | `store-assets/<zh|en>/promo-marquee-1400x560.png` |
 
 ### Screenshot Notes
 
@@ -231,7 +231,7 @@ Contact: benjaminfaxpaper01@gmail.com
       `datagov-canvas`.
 - [x] **README / CLAUDE.md wording** no longer says the app copies dbdiagram.io; README states
       it is independent and not affiliated with the DBML maintainers.
-- [x] Screenshots (zh + en) and the 440×280 promo tiles — `npm run shots`.
+- [x] Screenshots (zh + en) the 440×280 promo tiles and the 1400×560 marquee tiles — `npm run shots`.
 - [x] Package: `npm run build && npm run package` → `datagov-canvas-<version>.zip` (contents of
       `dist/`, manifest at the root, no `.map` files; 0.1.0 is ~3 MB zipped).
 - [x] Public GitHub repo https://github.com/bblmian/datagov-canvas (2026-10-13), Pages from

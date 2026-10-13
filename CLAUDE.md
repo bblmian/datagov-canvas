@@ -20,7 +20,7 @@ npm run e2e                         # GUI-only scenarios against dist/ in Chrome
 npx vitest run src/canvas/graph.test.ts        # single file
 npx vitest run -t "composite primary key"      # single test by name
 npm run typecheck
-npm run shots                       # store screenshots + promo tiles → store-assets/{zh,en}/ (needs dist/; scripts/store-shots.mjs)
+npm run shots                       # store screenshots + small/marquee promo tiles → store-assets/{zh,en}/ (needs dist/; scripts/store-shots.mjs)
 npm run package                     # zip dist/ → datagov-canvas-<version>.zip for the Chrome Web Store
 npm run icons                       # render public/logo{,-small}.svg to public/icons/*.png (scripts/make-icons.mjs, uses Chrome for Testing)
 CPU=4 node scripts/perf/drag.mjs dist run1    # drag benchmark on a 60-table diagram (scripts/perf/: idle.mjs, trace.mjs, prof.mjs; not wired to npm yet)

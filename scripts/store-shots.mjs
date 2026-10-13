@@ -1,11 +1,11 @@
-// Chrome Web Store screenshots (1280×800) and small promo tiles (440×280), one set per listing
+// Chrome Web Store screenshots (1280×800), small promo tiles (440×280) and marquee tiles (1400×560), one set per listing
 // language, written to store-assets/<lang>/. Runs the built extension (dist/) in Chrome for Testing
 // like e2e/run.mjs, seeds a data-governance diagram into storage, and captures each view at 2× then
 // downsamples (sips) so text stays crisp at the store's exact size.
 // Usage: npm run build && npm run shots   (E2E_CHROME overrides the browser path; macOS only: sips)
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -213,11 +213,12 @@ for (const lang of ['zh', 'en']) {
     await page.waitForTimeout(1500);
     if (await page.locator('.stale, .banner-error').count()) throw new Error(`${lang}: the sample DBML has errors`);
   };
-  const shot = async (name) => {
+  const shot = async (name, keepFull) => {
     const file = join(out, name);
     await page.mouse.move(1279, 799); // no hover highlight unless a step asks for one
     await page.waitForTimeout(400);
     await page.screenshot({ path: file });
+    if (keepFull) copyFileSync(file, keepFull);
     shrink(file, 1280, 800);
     console.log(file);
   };
@@ -229,7 +230,8 @@ for (const lang of ['zh', 'en']) {
 
   // 2. lineage across the three layers, editor collapsed, key columns only
   await seed({ editorHidden: true, displayMode: 'keys' });
-  await shot('2-lineage.png');
+  const lineageFull = join(tmpdir(), `dgc-lineage-${lang}.png`); // 2× copy for the marquee tile
+  await shot('2-lineage.png', lineageFull);
 
   // 3. property panel on the fact table
   await seed({ editorHidden: true, displayMode: 'all', inspectorWidth: 420 });
@@ -260,5 +262,24 @@ for (const lang of ['zh', 'en']) {
   await tp.screenshot({ path: tileFile });
   shrink(tileFile, 440, 280);
   console.log(tileFile);
+
+  // marquee tile: the same branding on the left, the lineage screenshot framed on the right
+  const mp = await tile.newPage({ viewport: { width: 1400, height: 560 }, deviceScaleFactor: 2 });
+  const lineage = `data:image/png;base64,${readFileSync(lineageFull).toString('base64')}`;
+  await mp.setContent(`<!doctype html><meta charset="utf-8"><style>
+    html,body{margin:0;width:1400px;height:560px;overflow:hidden;background:#0f172a;color:#fff;font-family:-apple-system,"PingFang SC","Helvetica Neue",sans-serif}
+    .w{position:relative;height:100%}
+    .txt{position:absolute;left:72px;top:0;bottom:0;width:470px;display:flex;flex-direction:column;justify-content:center;gap:26px}
+    .top{display:flex;align-items:center;gap:22px} svg{width:104px;height:104px;flex:none}
+    h1{margin:0;font-size:${lang === 'zh' ? 52 : 46}px;font-weight:700;letter-spacing:.5px;line-height:1.15}
+    p{margin:0;font-size:26px;line-height:1.55;color:#cbd5e1} p b{color:#22d3ee;font-weight:600}
+    img{position:absolute;left:590px;top:44px;width:760px;border-radius:12px;box-shadow:0 0 0 1px #334155,0 24px 60px rgba(0,0,0,.5)}
+  </style><div class="w"><div class="txt"><div class="top">${logo}<h1>${name}</h1></div><p>${t.tagline[0]}<br><b>${t.tagline[1]}</b></p></div><img src="${lineage}"></div>`);
+  await mp.waitForFunction(() => document.querySelector('img').complete);
+  const marqueeFile = join(out, 'promo-marquee-1400x560.png');
+  await mp.screenshot({ path: marqueeFile });
+  shrink(marqueeFile, 1400, 560);
+  rmSync(lineageFull);
+  console.log(marqueeFile);
   await tile.close();
 }
