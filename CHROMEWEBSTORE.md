@@ -213,7 +213,7 @@ Contact: benjaminfaxpaper01@gmail.com
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| 0.1.0 | — | First release | Draft |
+| 0.1.0 | 2026-10-13 | First release | Submitted for review 2026-10-13 |
 
 ## Review Notes
 
@@ -231,12 +231,13 @@ Contact: benjaminfaxpaper01@gmail.com
       `datagov-canvas`.
 - [x] **README / CLAUDE.md wording** no longer says the app copies dbdiagram.io; README states
       it is independent and not affiliated with the DBML maintainers.
-- [x] Screenshots (zh + en) the 440×280 promo tiles and the 1400×560 marquee tiles — `npm run shots`.
+- [x] Screenshots (zh + en), the 440×280 promo tiles and the 1400×560 marquee tiles — `npm run shots`.
 - [x] Package: `npm run build && npm run package` → `datagov-canvas-<version>.zip` (contents of
       `dist/`, manifest at the root, no `.map` files; 0.1.0 is ~3 MB zipped).
 - [x] Public GitHub repo https://github.com/bblmian/datagov-canvas (2026-10-13), Pages from
       `main` `/docs` serving the privacy policy.
-- [ ] Developer account: one-time US$5 registration and 2-Step Verification on the Google account.
+- [x] Developer account registered (publisher bblmian, non-trader, contact email
+      benjaminfaxpaper01@gmail.com); 0.1.0 submitted for review 2026-10-13.
 
 ### Staying clear of dbdiagram.io / Holistics
 
