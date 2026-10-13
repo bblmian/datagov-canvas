@@ -19,6 +19,7 @@ npx vitest run src/canvas/graph.test.ts        # single file
 npx vitest run -t "composite primary key"      # single test by name
 npm run typecheck
 npm run icons                       # render public/logo{,-small}.svg to public/icons/*.png (scripts/make-icons.mjs, uses Chrome for Testing)
+CPU=4 node scripts/perf/drag.mjs dist run1    # drag benchmark on a 60-table diagram (scripts/perf/: idle.mjs, trace.mjs, prof.mjs; not wired to npm yet)
 ```
 
 There is no linter; `npm run typecheck` (strict TS, `noUnusedLocals`/`noUnusedParameters`) is the static check. Everything in `public/` (manifest.json, background.js, _locales/, icons/, logo SVGs) is copied verbatim into `dist/`.
