@@ -15,7 +15,7 @@ permalink: /privacy
 - 点击「DBML 语法」按钮会在新标签页打开公开的 DBML 文档网站，该网站的隐私政策由其运营方负责。
 - 如果这些做法有变化，会更新本页并修改上面的日期。
 
-联系方式：zhubo3412@gmail.com
+联系方式：benjaminfaxpaper01@gmail.com
 
 # DataGov Canvas Privacy Policy
 
@@ -29,4 +29,4 @@ DataGov Canvas does not collect, upload or sell any personal data.
 - The "DBML syntax" button opens the public DBML documentation website in a new tab; that site's own privacy policy applies there.
 - If these practices change, this page and the date above will be updated.
 
-Contact: zhubo3412@gmail.com
+Contact: benjaminfaxpaper01@gmail.com

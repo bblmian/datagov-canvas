@@ -47,7 +47,7 @@ store shows the localized name automatically:
 • 无限存储：关系图较大（表多、带示例数据）时，不受浏览器默认的存储容量上限限制
 
 反馈与源码
-问题和建议请到 https://github.com/bblmian/datagov-canvas/issues 提交，或发邮件到 zhubo3412@gmail.com。
+问题和建议请到 https://github.com/bblmian/datagov-canvas/issues 提交，或发邮件到 benjaminfaxpaper01@gmail.com。
 本扩展以 MIT 许可证开源，为独立开发，与 DBML 语言的维护方没有关联。
 
 版本 0.1.0 — 首次发布
@@ -82,7 +82,7 @@ PERMISSIONS
 • Unlimited storage — lets large diagrams (many tables, sample records) grow past the browser's default storage limit
 
 FEEDBACK AND SOURCE
-Report issues at https://github.com/bblmian/datagov-canvas/issues or email zhubo3412@gmail.com.
+Report issues at https://github.com/bblmian/datagov-canvas/issues or email benjaminfaxpaper01@gmail.com.
 Open source under the MIT license. Independently developed; not affiliated with the maintainers of the DBML language.
 
 Version 0.1.0 — first release
@@ -182,7 +182,7 @@ yet (repo not created). Source: `docs/privacy.md` (GitHub Pages from `/docs`); s
 卸载扩展时，浏览器会一并删除这些数据；你也可以随时在扩展里删除单个关系图。
 点击「DBML 语法」按钮会在新标签页打开公开的 DBML 文档网站，该网站的隐私政策由其运营方负责。
 如果这些做法有变化，会更新本页并修改上面的日期。
-联系方式：zhubo3412@gmail.com
+联系方式：benjaminfaxpaper01@gmail.com
 
 DataGov Canvas does not collect, upload or sell any personal data.
 Your diagrams (DBML text, table positions) and settings are stored only in the browser's extension storage on your own computer and are never sent to any server.
@@ -190,7 +190,7 @@ The extension uses no cookies, analytics, ads or third-party services, and does 
 Uninstalling the extension deletes this data; you can also delete individual diagrams inside the extension at any time.
 The "DBML syntax" button opens the public DBML documentation website in a new tab; that site's own privacy policy applies there.
 If these practices change, this page and the date above will be updated.
-Contact: zhubo3412@gmail.com
+Contact: benjaminfaxpaper01@gmail.com
 ```
 
 ## Distribution
@@ -203,7 +203,7 @@ Contact: zhubo3412@gmail.com
 
 **Publisher Name** [REQUIRED]: bblmian (non-trader / individual)
 
-**Contact Email** [REQUIRED]: zhubo3412@gmail.com (shown publicly; Google sends review and policy notices here)
+**Contact Email** [REQUIRED]: benjaminfaxpaper01@gmail.com (shown publicly; Google sends review and policy notices here)
 
 **Support URL** [RECOMMENDED]: https://github.com/bblmian/datagov-canvas/issues
 
