@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Manifest V3 Chrome extension ("DataGov Canvas" / 数据治理画图; called "DBML Studio" before 2026-10-13) that re-implements the core of dbdiagram.io offline: a DBML editor on the left, a live ER diagram on the right, bilingual UI (en / zh). It must not use dbdiagram.io / Holistics branding — it is an independent implementation that only uses the open-source `@dbml/core` library.
+A Manifest V3 Chrome extension ("DataGov Canvas" / 数据治理画图; called "DBML Studio" before 2026-10-13) that works offline: a DBML editor on the left, a live ER / lineage diagram on the right, bilingual UI (en / zh). It is an independent implementation; the only third-party DBML code is the open-source `@dbml/core` / `@dbml/parse` (Apache-2.0). Never copy code, CSS, icons, sample diagrams or wording from the closed-source dbdiagram.io app, and never put dbdiagram / dbdocs / Holistics names or branding in the product, store listing or screenshots (see "Staying clear" in `CHROMEWEBSTORE.md`).
+
+Open source under MIT (`LICENSE`), headed for the Chrome Web Store: `CHROMEWEBSTORE.md` holds the listing, permission justifications and privacy answers, so update it whenever permissions, data handling or user-facing features change.
 
 Current status and the resume-from-here list live in `docs/项目现状与待办.md`; update it when wrapping up a session.
 
@@ -18,11 +20,13 @@ npm run e2e                         # GUI-only scenarios against dist/ in Chrome
 npx vitest run src/canvas/graph.test.ts        # single file
 npx vitest run -t "composite primary key"      # single test by name
 npm run typecheck
+npm run shots                       # store screenshots + promo tiles → store-assets/{zh,en}/ (needs dist/; scripts/store-shots.mjs)
+npm run package                     # zip dist/ → datagov-canvas-<version>.zip for the Chrome Web Store
 npm run icons                       # render public/logo{,-small}.svg to public/icons/*.png (scripts/make-icons.mjs, uses Chrome for Testing)
 CPU=4 node scripts/perf/drag.mjs dist run1    # drag benchmark on a 60-table diagram (scripts/perf/: idle.mjs, trace.mjs, prof.mjs; not wired to npm yet)
 ```
 
-There is no linter; `npm run typecheck` (strict TS, `noUnusedLocals`/`noUnusedParameters`) is the static check. Everything in `public/` (manifest.json, background.js, _locales/, icons/, logo SVGs) is copied verbatim into `dist/`.
+There is no linter; `npm run typecheck` (strict TS, `noUnusedLocals`/`noUnusedParameters`) is the static check. Everything in `public/` (manifest.json, background.js, _locales/, icons/, logo SVGs) is copied verbatim into `dist/`. The build also writes `dist/THIRD_PARTY_LICENSES.txt` (`scripts/third-party-licenses.mjs`, run in both the page and the worker build); it fails if a bundled package has no license text — add the upstream text to `scripts/licenses/<name>.txt` (scoped names: `@scope__name.txt`). Manifest `description` (`extDescription` in each `_locales`) must stay ≤ 132 characters.
 
 Dependencies are pinned to exact versions. The `@codemirror/*` packages must resolve to a single copy of `@codemirror/state` and `@codemirror/view` (two copies break the editor at runtime with no type error) — after adding or bumping a CodeMirror package, check `npm ls @codemirror/state @codemirror/view --all`.
 

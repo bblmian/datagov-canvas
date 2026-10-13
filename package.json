@@ -1,7 +1,8 @@
 {
-  "name": "dbdiagram-extension",
+  "name": "datagov-canvas",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "icons": "node scripts/make-icons.mjs",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "shots": "node scripts/store-shots.mjs",
+    "package": "rm -f datagov-canvas-$npm_package_version.zip && cd dist && zip -qrX ../datagov-canvas-$npm_package_version.zip . -x '.DS_Store' && cd .. && ls -l datagov-canvas-$npm_package_version.zip"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.3",

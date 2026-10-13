@@ -1,12 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { collectLicenses, thirdPartyLicenses } from './scripts/third-party-licenses.mjs';
 
 // The extension page (index.html) is built into dist/ together with everything in public/
-// (manifest.json, background.js, _locales, icons). Load dist/ as an unpacked extension.
+// (manifest.json, background.js, _locales, icons) and THIRD_PARTY_LICENSES.txt.
+// Load dist/ as an unpacked extension.
 export default defineConfig({
   base: './',
-  plugins: [react()],
-  worker: { format: 'es' },
+  plugins: [react(), thirdPartyLicenses()],
+  worker: { format: 'es', plugins: () => [collectLicenses()] },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

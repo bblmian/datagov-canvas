@@ -1,6 +1,8 @@
 # 数据治理画图 DataGov Canvas（Chrome 扩展）
 
-一个离线运行的 Chrome 扩展：左边写 [DBML](https://dbml.dbdiagram.io/docs)，右边实时生成数据库 ER 图。功能上参照 dbdiagram.io 的核心部分自己实现，和 dbdiagram.io / Holistics 没有关系。DBML 的解析、SQL 导入导出用的是开源库 `@dbml/core`（Apache-2.0）。
+一个离线运行的 Chrome 扩展：左边写 [DBML](https://dbml.dbdiagram.io/docs)（一种开源的数据库结构描述语言），右边实时生成 ER 图、数据血缘和元数据图，也可以直接在图上编辑。不需要账号，数据只存在本机。
+
+本项目独立开发，与 DBML 语言的维护方没有关联。DBML 的解析、SQL 导入导出用的是开源库 `@dbml/core` 和 `@dbml/parse`（Apache-2.0）。
 
 ## 功能
 
@@ -33,3 +35,9 @@ npm test           # 单元测试（vitest）
 npm run typecheck
 npm run icons      # 用 public/logo.svg、logo-small.svg 重新生成 public/icons/*.png
 ```
+
+## 许可证
+
+[MIT](LICENSE)。构建时会把打包进扩展的第三方库许可证汇总到 `dist/THIRD_PARTY_LICENSES.txt`（`scripts/third-party-licenses.mjs`）；某个库没带许可证文件时，从 `scripts/licenses/` 取上游原文，两处都没有就构建失败。
+
+隐私政策：[docs/privacy.md](docs/privacy.md)。上架资料：[CHROMEWEBSTORE.md](CHROMEWEBSTORE.md)。

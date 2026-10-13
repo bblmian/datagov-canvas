@@ -3,7 +3,7 @@
     "message": "DataGov Canvas – Data Governance Diagrams"
   },
   "extDescription": {
-    "message": "Draw data governance diagrams from DBML: ER diagrams, data lineage and metadata. Offline, bilingual (English / 中文), exports PNG, SVG, PDF and SQL."
+    "message": "Draw data governance diagrams from DBML: ER diagrams, data lineage and metadata. Works offline; exports PNG, SVG, PDF and SQL."
   },
   "actionTitle": {
     "message": "Open DataGov Canvas"
