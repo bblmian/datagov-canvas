@@ -28,8 +28,8 @@ store shows the localized name automatically:
 • 数据治理：表分组、数据血缘（上下游依赖）、元数据、注释便签、示例数据，可按视图只显示部分表
 • 图形化编辑：在属性面板里改表和字段，从字段拖线建立关系，拖到垃圾桶删除，随时撤销
 • 三种显示模式：全部字段 / 仅键字段 / 仅表名
-• 导入：粘贴或选择 PostgreSQL、MySQL、SQL Server、Oracle、Snowflake 建表语句，以及 Rails schema.rb 和 DBML 文件
-• 导出：PNG、SVG 图片，矢量 PDF，DBML，PostgreSQL / MySQL / SQL Server / Oracle 建表语句，JSON
+• 导入：粘贴已有的建表 SQL，或打开 DBML 文件
+• 导出：PNG、SVG 图片，矢量 PDF，DBML 和建表 SQL
 • 可以建多个关系图，自动保存在本机
 • 中英双语界面，一键切换
 
@@ -63,8 +63,8 @@ FEATURES
 • Data governance: table groups, data lineage (upstream and downstream dependencies), metadata, sticky notes, sample records, and views that show only part of the diagram
 • Visual editing: change tables and columns in the property panel, drag from a column to create a relationship, drop onto the trash can to delete, undo any time
 • Three display modes: all columns / key columns only / table names only
-• Import: paste or open CREATE TABLE statements from PostgreSQL, MySQL, SQL Server, Oracle and Snowflake, as well as Rails schema.rb and DBML files
-• Export: PNG and SVG images, vector PDF, DBML, PostgreSQL / MySQL / SQL Server / Oracle DDL, JSON
+• Import: paste existing CREATE TABLE SQL, or open a DBML file
+• Export: PNG and SVG images, vector PDF, DBML and CREATE TABLE SQL
 • Keep as many diagrams as you like, saved automatically on your computer
 • English and Chinese interface, switch with one click
 
@@ -213,7 +213,7 @@ Contact: benjaminfaxpaper01@gmail.com
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
-| 0.1.0 | 2026-10-13 | First release | Submitted for review 2026-10-13 |
+| 0.1.0 | 2026-10-13 | First release | Rejected 2026-10-13 (keyword spam, see Rejection History); description fixed, resubmitted |
 
 ## Review Notes
 
@@ -260,3 +260,7 @@ Contact: benjaminfaxpaper01@gmail.com
 
 | Date | Reason | Fix Applied | Resubmitted |
 |------|--------|-------------|-------------|
+| 2026-10-13 | Keyword spam (ref "Yellow Argon"): the zh description's import line listed PostgreSQL, MySQL, SQL Server, Oracle, Snowflake, Rails schema.rb and DBML | Import / export lines in both languages now say "建表 SQL" / "CREATE TABLE SQL" without naming databases; package unchanged | 2026-10-13 |
+
+Rule from this: don't list databases, file formats or other product names in the listing text —
+describe the capability once ("existing CREATE TABLE SQL"); the screenshots show the details.
